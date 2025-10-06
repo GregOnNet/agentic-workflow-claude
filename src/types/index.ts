@@ -6,3 +6,22 @@ export interface Book {
   description?: string
   year?: number
 }
+
+// Kanban board types
+export interface BookWithStatus extends Book {
+  readingStatus: 'to-read' | 'currently-reading' | 'read'
+  order: number
+}
+
+export interface BookColumn {
+  id: 'to-read' | 'currently-reading' | 'read'
+  title: string
+  books: BookWithStatus[]
+}
+
+export interface BookReadingState {
+  [bookId: number]: {
+    status: 'to-read' | 'currently-reading' | 'read'
+    order: number
+  }
+}

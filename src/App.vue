@@ -5,6 +5,7 @@
     <nav>
       <router-link to="/">Home</router-link>
       <router-link to="/books">Books</router-link>
+      <router-link to="/kanban">Reading Board</router-link>
     </nav>
   </header>
   <main>

@@ -2,9 +2,14 @@ import type { Book } from '../types'
 
 const API_URL = 'http://localhost:4730'
 
-export async function getBooks(): Promise<Book[]> {
+export async function getBooks(searchTerm?: string): Promise<Book[]> {
   try {
-    const response = await fetch(`${API_URL}/books`)
+    let url = `${API_URL}/books`
+    if (searchTerm && searchTerm.trim()) {
+      url += `?q=${encodeURIComponent(searchTerm.trim())}`
+    }
+
+    const response = await fetch(url)
     if (!response.ok) {
       throw new Error(`API error: ${response.status}`)
     }

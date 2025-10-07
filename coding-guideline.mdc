@@ -1,0 +1,1671 @@
+# Vue Coding Guidelines: SOLID Principles for High-Quality Code
+
+## Introduction
+
+This document provides guidelines for writing high-quality Vue code that follows SOLID principles and official Vue.js Style Guide recommendations. These guidelines are derived from practical refactoring experiences and represent industry best practices for Vue application development.
+
+---
+
+## Priority A: Essential Rules (Error Prevention)
+
+These rules help prevent errors and should be followed at all costs.
+
+### Use Multi-Word Component Names
+
+User component names should always be multi-word, except for root `App` components. This prevents conflicts with existing and future HTML elements.
+
+**✅ Good Practice:**
+
+```vue
+<!-- In pre-compiled templates -->
+<TodoItem />
+<UserProfile />
+<BookList />
+
+<!-- In in-DOM templates -->
+<todo-item></todo-item>
+```
+
+**❌ Bad Practice:**
+
+```vue
+<!-- Conflicts with potential HTML elements -->
+<Item />
+<User />
+<item></item>
+```
+
+**Reference:** [Vue.js Style Guide - Multi-word Component Names](https://vuejs.org/style-guide/rules-essential.html#use-multi-word-component-names)
+
+---
+
+### Use Detailed Prop Definitions
+
+In committed code, prop definitions should always be as detailed as possible, specifying at least type(s).
+
+**✅ Good Practice:**
+
+```vue
+<script setup lang="ts">
+const props = defineProps({
+  status: {
+    type: String,
+    required: true,
+    validator: (value: string) => {
+      return ['syncing', 'synced', 'version-conflict', 'error'].includes(value)
+    },
+  },
+  items: {
+    type: Array as PropType<Book[]>,
+    default: () => [],
+  },
+})
+</script>
+```
+
+**❌ Bad Practice:**
+
+```vue
+<script setup>
+// Only OK when prototyping
+const props = defineProps(['status', 'items'])
+</script>
+```
+
+**Reference:** [Vue.js Style Guide - Detailed Prop Definitions](https://vuejs.org/style-guide/rules-essential.html#use-detailed-prop-definitions)
+
+---
+
+### Use Keyed v-for
+
+`key` with `v-for` is always required on components to maintain internal component state down the subtree.
+
+**✅ Good Practice:**
+
+```vue
+<template>
+  <ul>
+    <li v-for="book in books" :key="book.id">
+      {{ book.title }}
+    </li>
+  </ul>
+</template>
+```
+
+**❌ Bad Practice:**
+
+```vue
+<template>
+  <ul>
+    <!-- Missing key can cause rendering issues -->
+    <li v-for="book in books">
+      {{ book.title }}
+    </li>
+  </ul>
+</template>
+```
+
+**Reference:** [Vue.js Style Guide - Keyed v-for](https://vuejs.org/style-guide/rules-essential.html#use-keyed-v-for)
+
+---
+
+### Avoid v-if with v-for
+
+Never use `v-if` on the same element as `v-for`.
+
+**✅ Good Practice:**
+
+```vue
+<template>
+  <!-- Use computed property to filter -->
+  <ul>
+    <li v-for="user in activeUsers" :key="user.id">
+      {{ user.name }}
+    </li>
+  </ul>
+</template>
+
+<script setup>
+const activeUsers = computed(() => {
+  return users.value.filter((user) => user.isActive)
+})
+</script>
+```
+
+**Alternative (using template):**
+
+```vue
+<template>
+  <ul>
+    <template v-for="user in users" :key="user.id">
+      <li v-if="user.isActive">
+        {{ user.name }}
+      </li>
+    </template>
+  </ul>
+</template>
+```
+
+**❌ Bad Practice:**
+
+```vue
+<template>
+  <ul>
+    <!-- v-if and v-for on same element -->
+    <li v-for="user in users" v-if="user.isActive" :key="user.id">
+      {{ user.name }}
+    </li>
+  </ul>
+</template>
+```
+
+**Reference:** [Vue.js Style Guide - Avoid v-if with v-for](https://vuejs.org/style-guide/rules-essential.html#avoid-v-if-with-v-for)
+
+---
+
+### Use Component-Scoped Styling
+
+Styles in components should always be scoped (or use CSS modules) to avoid conflicts.
+
+**✅ Good Practice:**
+
+```vue
+<template>
+  <button class="button button-close">×</button>
+</template>
+
+<style scoped>
+.button {
+  border: none;
+  border-radius: 2px;
+}
+
+.button-close {
+  background-color: red;
+}
+</style>
+```
+
+**Using CSS Modules:**
+
+```vue
+<template>
+  <button :class="[$style.button, $style.buttonClose]">×</button>
+</template>
+
+<style module>
+.button {
+  border: none;
+  border-radius: 2px;
+}
+
+.buttonClose {
+  background-color: red;
+}
+</style>
+```
+
+**❌ Bad Practice:**
+
+```vue
+<template>
+  <button class="btn">×</button>
+</template>
+
+<!-- Unscoped styles can leak to other components -->
+<style>
+.btn {
+  background-color: red;
+}
+</style>
+```
+
+**Reference:** [Vue.js Style Guide - Component-Scoped Styling](https://vuejs.org/style-guide/rules-essential.html#use-component-scoped-styling)
+
+---
+
+## Priority B: Strongly Recommended (Readability)
+
+These rules improve readability and developer experience.
+
+### Component Files
+
+Each component should be in its own file.
+
+**✅ Good Practice:**
+
+```
+components/
+├── TodoList.vue
+├── TodoItem.vue
+└── UserProfile.vue
+```
+
+**❌ Bad Practice:**
+
+```js
+// All components in one file
+app.component('TodoList', {
+  /* ... */
+})
+app.component('TodoItem', {
+  /* ... */
+})
+```
+
+**Reference:** [Vue.js Style Guide - Component Files](https://vuejs.org/style-guide/rules-strongly-recommended.html#component-files)
+
+---
+
+### Single-File Component Filename Casing
+
+Filenames should be either always PascalCase or always kebab-case.
+
+**✅ Good Practice:**
+
+```
+components/
+├── TodoItem.vue          (PascalCase - Recommended)
+├── UserProfile.vue
+└── BookList.vue
+```
+
+**Or consistently:**
+
+```
+components/
+├── todo-item.vue         (kebab-case - Also acceptable)
+├── user-profile.vue
+└── book-list.vue
+```
+
+**❌ Bad Practice:**
+
+```
+components/
+├── TodoItem.vue          (Mixed casing)
+├── userProfile.vue
+└── book-list.vue
+```
+
+**Reference:** [Vue.js Style Guide - SFC Filename Casing](https://vuejs.org/style-guide/rules-strongly-recommended.html#single-file-component-filename-casing)
+
+---
+
+### Base Component Names
+
+Base components (presentational, dumb, or pure components) should all begin with a specific prefix.
+
+**✅ Good Practice:**
+
+```
+components/
+├── BaseButton.vue
+├── BaseTable.vue
+├── BaseIcon.vue
+└── BaseCard.vue
+```
+
+**Or using 'App' prefix:**
+
+```
+components/
+├── AppButton.vue
+├── AppTable.vue
+└── AppIcon.vue
+```
+
+**❌ Bad Practice:**
+
+```
+components/
+├── Button.vue
+├── Table.vue
+└── Icon.vue
+```
+
+**Reference:** [Vue.js Style Guide - Base Component Names](https://vuejs.org/style-guide/rules-strongly-recommended.html#base-component-names)
+
+---
+
+### Tightly Coupled Component Names
+
+Child components that are tightly coupled with their parent should include the parent component name as a prefix.
+
+**✅ Good Practice:**
+
+```
+components/
+├── TodoList.vue
+├── TodoListItem.vue
+├── TodoListItemButton.vue
+└── SearchSidebar.vue
+    ├── SearchSidebarNavigation.vue
+```
+
+**❌ Bad Practice:**
+
+```
+components/
+├── TodoList.vue
+├── TodoItem.vue         (Unclear relationship)
+├── TodoButton.vue
+└── SearchSidebar.vue
+    ├── NavigationForSearchSidebar.vue  (Awkward naming)
+```
+
+**Reference:** [Vue.js Style Guide - Tightly Coupled Component Names](https://vuejs.org/style-guide/rules-strongly-recommended.html#tightly-coupled-component-names)
+
+---
+
+### Order of Words in Component Names
+
+Component names should start with the highest-level (often most general) words and end with descriptive modifying words.
+
+**✅ Good Practice:**
+
+```
+components/
+├── SearchButtonClear.vue
+├── SearchButtonRun.vue
+├── SearchInputQuery.vue
+├── SearchInputExcludeGlob.vue
+└── SettingsCheckboxTerms.vue
+    ├── SettingsCheckboxLaunchOnStartup.vue
+```
+
+**❌ Bad Practice:**
+
+```
+components/
+├── ClearSearchButton.vue     (Starts with action)
+├── ExcludeFromSearchInput.vue
+├── LaunchOnStartupCheckbox.vue
+└── RunSearchButton.vue
+    ├── SearchInput.vue
+    ├── TermsCheckbox.vue
+```
+
+**Reference:** [Vue.js Style Guide - Order of Words in Component Names](https://vuejs.org/style-guide/rules-strongly-recommended.html#order-of-words-in-component-names)
+
+---
+
+### Self-Closing Components
+
+Components with no content should be self-closing in Single-File Components, string templates, and JSX.
+
+**✅ Good Practice:**
+
+```vue
+<template>
+  <MyComponent />
+  <BaseInput />
+</template>
+```
+
+**❌ Bad Practice:**
+
+```vue
+<template>
+  <MyComponent></MyComponent>
+  <BaseInput></BaseInput>
+</template>
+```
+
+**Note:** In DOM templates, self-closing is not allowed by HTML spec.
+
+**Reference:** [Vue.js Style Guide - Self-Closing Components](https://vuejs.org/style-guide/rules-strongly-recommended.html#self-closing-components)
+
+---
+
+### Component Name Casing in Templates
+
+Component names should be PascalCase in Single-File Components.
+
+**✅ Good Practice:**
+
+```vue
+<template>
+  <MyComponent />
+  <TodoItem />
+  <UserProfile />
+</template>
+```
+
+**❌ Bad Practice:**
+
+```vue
+<template>
+  <my-component />
+  <todo-item />
+  <user-profile />
+</template>
+```
+
+**Note:** In DOM templates, kebab-case is required.
+
+**Reference:** [Vue.js Style Guide - Component Name Casing in Templates](https://vuejs.org/style-guide/rules-strongly-recommended.html#component-name-casing-in-templates)
+
+---
+
+### Component Name Casing in JS/JSX
+
+Component names in JS/JSX should always be PascalCase.
+
+**✅ Good Practice:**
+
+```js
+import MyComponent from './MyComponent.vue'
+import TodoItem from './TodoItem.vue'
+
+export default {
+  components: {
+    MyComponent,
+    TodoItem,
+  },
+}
+```
+
+**❌ Bad Practice:**
+
+```js
+import myComponent from './MyComponent.vue'
+import todoItem from './TodoItem.vue'
+
+export default {
+  components: {
+    'my-component': myComponent,
+    'todo-item': todoItem,
+  },
+}
+```
+
+**Reference:** [Vue.js Style Guide - Component Name Casing in JS/JSX](https://vuejs.org/style-guide/rules-strongly-recommended.html#component-name-casing-in-js-jsx)
+
+---
+
+### Full-Word Component Names
+
+Component names should prefer full words over abbreviations.
+
+**✅ Good Practice:**
+
+```
+components/
+├── StudentDashboardSettings.vue
+├── UserProfileOptions.vue
+└── CustomerListItem.vue
+```
+
+**❌ Bad Practice:**
+
+```
+components/
+├── SdSettings.vue       (Unclear abbreviation)
+├── UProfOpts.vue        (Too abbreviated)
+└── CustListItem.vue
+```
+
+**Reference:** [Vue.js Style Guide - Full-Word Component Names](https://vuejs.org/style-guide/rules-strongly-recommended.html#full-word-component-names)
+
+---
+
+### Prop Name Casing
+
+Prop names should use camelCase in declarations but kebab-case in templates.
+
+**✅ Good Practice:**
+
+```vue
+<!-- In template -->
+<template>
+  <WelcomeMessage greeting-text="hi" />
+</template>
+
+<script setup>
+// In script
+defineProps({
+  greetingText: String,
+})
+</script>
+```
+
+**❌ Bad Practice:**
+
+```vue
+<template>
+  <WelcomeMessage greetingText="hi" />
+</template>
+
+<script setup>
+defineProps({
+  'greeting-text': String,
+})
+</script>
+```
+
+**Reference:** [Vue.js Style Guide - Prop Name Casing](https://vuejs.org/style-guide/rules-strongly-recommended.html#prop-name-casing)
+
+---
+
+### Multi-Attribute Elements
+
+Elements with multiple attributes should span multiple lines, with one attribute per line.
+
+**✅ Good Practice:**
+
+```vue
+<template>
+  <img src="https://vuejs.org/images/logo.png" alt="Vue Logo" class="logo" />
+
+  <MyComponent foo="a" bar="b" baz="c" @event="handleEvent" />
+</template>
+```
+
+**❌ Bad Practice:**
+
+```vue
+<template>
+  <img src="https://vuejs.org/images/logo.png" alt="Vue Logo" class="logo" />
+
+  <MyComponent foo="a" bar="b" baz="c" @event="handleEvent" />
+</template>
+```
+
+**Reference:** [Vue.js Style Guide - Multi-Attribute Elements](https://vuejs.org/style-guide/rules-strongly-recommended.html#multi-attribute-elements)
+
+---
+
+### Simple Expressions in Templates
+
+Component templates should only include simple expressions, with complex logic refactored to computed properties or methods.
+
+**✅ Good Practice:**
+
+```vue
+<template>
+  <div>
+    {{ normalizedFullName }}
+  </div>
+</template>
+
+<script setup>
+const normalizedFullName = computed(() => {
+  return fullName.value
+    .split(' ')
+    .map((word) => word[0].toUpperCase() + word.slice(1))
+    .join(' ')
+})
+</script>
+```
+
+**❌ Bad Practice:**
+
+```vue
+<template>
+  <div>
+    {{
+      fullName
+        .split(' ')
+        .map((word) => {
+          return word[0].toUpperCase() + word.slice(1)
+        })
+        .join(' ')
+    }}
+  </div>
+</template>
+```
+
+**Reference:** [Vue.js Style Guide - Simple Expressions in Templates](https://vuejs.org/style-guide/rules-strongly-recommended.html#simple-expressions-in-templates)
+
+---
+
+### Simple Computed Properties
+
+Complex computed properties should be split into as many simpler properties as possible.
+
+**✅ Good Practice:**
+
+```vue
+<script setup>
+const basePrice = computed(() => manufactureCost.value / (1 - profitMargin.value))
+
+const discount = computed(() => basePrice.value * (discountPercent.value || 0))
+
+const finalPrice = computed(() => basePrice.value - discount.value)
+</script>
+```
+
+**❌ Bad Practice:**
+
+```vue
+<script setup>
+const price = computed(() => {
+  const basePrice = manufactureCost.value / (1 - profitMargin.value)
+  return basePrice - basePrice * (discountPercent.value || 0)
+})
+</script>
+```
+
+**Reference:** [Vue.js Style Guide - Simple Computed Properties](https://vuejs.org/style-guide/rules-strongly-recommended.html#simple-computed-properties)
+
+---
+
+### Quoted Attribute Values
+
+Non-empty HTML attribute values should always be inside quotes.
+
+**✅ Good Practice:**
+
+```vue
+<template>
+  <input type="text" />
+  <AppSidebar :style="{ width: sidebarWidth + 'px' }" />
+</template>
+```
+
+**❌ Bad Practice:**
+
+```vue
+<template>
+  <input type=text />
+  <AppSidebar :style={width:sidebarWidth+'px'} />
+</template>
+```
+
+**Reference:** [Vue.js Style Guide - Quoted Attribute Values](https://vuejs.org/style-guide/rules-strongly-recommended.html#quoted-attribute-values)
+
+---
+
+### Directive Shorthands
+
+Directive shorthands should be used consistently (always or never).
+
+**✅ Good Practice:**
+
+```vue
+<template>
+  <!-- Always use shorthands -->
+  <input
+    :value="newTodoText"
+    :placeholder="newTodoInstructions"
+    @input="onInput"
+    @focus="onFocus"
+  />
+</template>
+```
+
+**Or consistently without shorthands:**
+
+```vue
+<template>
+  <!-- Never use shorthands -->
+  <input
+    v-bind:value="newTodoText"
+    v-bind:placeholder="newTodoInstructions"
+    v-on:input="onInput"
+    v-on:focus="onFocus"
+  />
+</template>
+```
+
+**❌ Bad Practice:**
+
+```vue
+<template>
+  <!-- Mixed usage -->
+  <input
+    v-bind:value="newTodoText"
+    :placeholder="newTodoInstructions"
+    @input="onInput"
+    v-on:focus="onFocus"
+  />
+</template>
+```
+
+**Reference:** [Vue.js Style Guide - Directive Shorthands](https://vuejs.org/style-guide/rules-strongly-recommended.html#directive-shorthands)
+
+---
+
+## Priority C: Recommended (Consistency)
+
+These rules promote consistency when multiple, equally good options exist.
+
+### Component/Instance Options Order
+
+Component options should be ordered consistently.
+
+**✅ Recommended Order:**
+
+1. **Global Awareness** (requires knowledge outside the component)
+   - `name`
+
+2. **Template Compiler Options** (changes the way templates are compiled)
+   - `compilerOptions`
+
+3. **Template Dependencies** (assets used in the template)
+   - `components`
+   - `directives`
+
+4. **Composition** (merges properties into the options)
+   - `extends`
+   - `mixins`
+   - `provide` / `inject`
+
+5. **Interface** (the interface to the component)
+   - `inheritAttrs`
+   - `props`
+   - `emits`
+   - `expose`
+
+6. **Composition API** (entry point for using the Composition API)
+   - `setup`
+
+7. **Local State** (local reactive properties)
+   - `data`
+   - `computed`
+
+8. **Events** (callbacks triggered by reactive events)
+   - `watch`
+   - Lifecycle events (in order of calling)
+     - `beforeCreate`
+     - `created`
+     - `beforeMount`
+     - `mounted`
+     - `beforeUpdate`
+     - `updated`
+     - `activated`
+     - `deactivated`
+     - `beforeUnmount`
+     - `unmounted`
+     - `errorCaptured`
+     - `renderTracked`
+     - `renderTriggered`
+
+9. **Non-Reactive Properties** (instance properties independent of the reactivity system)
+   - `methods`
+
+10. **Rendering** (the declarative description of the component output)
+    - `template` / `render`
+
+**Reference:** [Vue.js Style Guide - Component Options Order](https://vuejs.org/style-guide/rules-recommended.html#component-instance-options-order)
+
+---
+
+### Element Attribute Order
+
+Attributes should be ordered consistently for readability.
+
+**✅ Recommended Order:**
+
+1. **Definition** (provides the component options)
+   - `is`
+
+2. **List Rendering** (creates multiple variations of the same element)
+   - `v-for`
+
+3. **Conditionals** (whether the element is rendered/shown)
+   - `v-if`
+   - `v-else-if`
+   - `v-else`
+   - `v-show`
+   - `v-cloak`
+
+4. **Render Modifiers** (changes the way the element renders)
+   - `v-pre`
+   - `v-once`
+
+5. **Global Awareness** (requires knowledge beyond the component)
+   - `id`
+
+6. **Unique Attributes** (attributes that require unique values)
+   - `ref`
+   - `key`
+
+7. **Two-Way Binding** (combining binding and events)
+   - `v-model`
+
+8. **Other Attributes** (all unspecified bound & unbound attributes)
+
+9. **Events** (component event listeners)
+   - `v-on` / `@`
+
+10. **Content** (overrides the content of the element)
+    - `v-html`
+    - `v-text`
+
+**Example:**
+
+```vue
+<template>
+  <div
+    v-if="isVisible"
+    v-for="item in items"
+    :key="item.id"
+    ref="itemRef"
+    :class="itemClass"
+    :data-id="item.id"
+    @click="handleClick"
+  >
+    {{ item.name }}
+  </div>
+</template>
+```
+
+**Reference:** [Vue.js Style Guide - Element Attribute Order](https://vuejs.org/style-guide/rules-recommended.html#element-attribute-order)
+
+---
+
+### Empty Lines in Component/Instance Options
+
+Add one empty line between multi-line properties for readability.
+
+**✅ Good Practice:**
+
+```vue
+<script>
+export default {
+  props: {
+    value: {
+      type: String,
+      required: true,
+    },
+
+    focused: {
+      type: Boolean,
+      default: false,
+    },
+  },
+
+  computed: {
+    formattedValue() {
+      // ...
+    },
+
+    displayValue() {
+      // ...
+    },
+  },
+}
+</script>
+```
+
+**❌ Bad Practice:**
+
+```vue
+<script>
+export default {
+  props: {
+    value: {
+      type: String,
+      required: true,
+    },
+    focused: {
+      type: Boolean,
+      default: false,
+    },
+  },
+  computed: {
+    formattedValue() {
+      // ...
+    },
+    displayValue() {
+      // ...
+    },
+  },
+}
+</script>
+```
+
+**Reference:** [Vue.js Style Guide - Empty Lines](https://vuejs.org/style-guide/rules-recommended.html#empty-lines-in-component-instance-options)
+
+---
+
+### Single-File Component Top-Level Element Order
+
+Single-File Components should maintain a consistent order of `<script>`, `<template>`, and `<style>` tags.
+
+**✅ Good Practice (Recommended Order):**
+
+```vue
+<!-- ComponentName.vue -->
+<script setup lang="ts">
+// Component logic
+</script>
+
+<template>
+  <!-- Component template -->
+</template>
+
+<style scoped>
+/* Component styles */
+</style>
+```
+
+**Alternative acceptable order:**
+
+```vue
+<!-- ComponentName.vue -->
+<template>
+  <!-- Component template -->
+</template>
+
+<script setup lang="ts">
+// Component logic
+</script>
+
+<style scoped>
+/* Component styles */
+</style>
+```
+
+**Key Point:** Choose one order and be consistent across your entire project.
+
+**Reference:** [Vue.js Style Guide - SFC Top-Level Element Order](https://vuejs.org/style-guide/rules-recommended.html#single-file-component-top-level-element-order)
+
+---
+
+## Priority D: Use with Caution
+
+These features should be used sparingly and with awareness of potential issues.
+
+### Element Selectors with Scoped Styles
+
+Avoid element selectors with `scoped` styles as they are slow.
+
+**✅ Good Practice:**
+
+```vue
+<template>
+  <button class="btn btn-close">×</button>
+</template>
+
+<style scoped>
+.btn-close {
+  background-color: red;
+}
+</style>
+```
+
+**❌ Bad Practice:**
+
+```vue
+<template>
+  <button>×</button>
+</template>
+
+<style scoped>
+button {
+  background-color: red;
+}
+</style>
+```
+
+**Reason:** To scope styles, Vue adds a unique attribute to component elements (e.g., `data-v-f3f3eg9`). Element selectors like `button[data-v-f3f3eg9]` are considerably slower than class selectors.
+
+**Reference:** [Vue.js Style Guide - Element Selectors with Scoped](https://vuejs.org/style-guide/rules-use-with-caution.html#element-selectors-with-scoped)
+
+---
+
+### Implicit Parent-Child Communication
+
+Avoid implicit parent-child communication via `this.$parent` or mutating props.
+
+**✅ Good Practice:**
+
+```vue
+<!-- Child component -->
+<script setup>
+const props = defineProps({
+  todoItem: Object,
+})
+
+const emit = defineEmits(['update'])
+
+function removeTodo() {
+  emit('update', props.todoItem.id)
+}
+</script>
+
+<!-- Parent component -->
+<template>
+  <TodoItem :todo-item="todo" @update="handleRemoveTodo" />
+</template>
+```
+
+**❌ Bad Practice:**
+
+```vue
+<!-- Child component -->
+<script setup>
+function removeTodo() {
+  // Directly accessing parent
+  this.$parent.todos = this.$parent.todos.filter((todo) => todo.id !== this.todoItem.id)
+}
+</script>
+```
+
+**Reference:** [Vue.js Style Guide - Implicit Parent-Child Communication](https://vuejs.org/style-guide/rules-use-with-caution.html#implicit-parent-child-communication)
+
+---
+
+## SOLID Principles in Vue
+
+### Single Responsibility Principle (SRP)
+
+Components, composables, and functions should have only one reason to change.
+
+**✅ Good Practice:** Extract specific functionality into dedicated composables
+
+```vue
+<script setup>
+// Using composables with single responsibilities
+const { searchTerm, handleSearch } = useSearch(() => fetchData())
+const { pagination, handlePageChange } = usePagination(() => fetchData())
+const { data, isLoading, error, fetchData } = useDataFetching(searchTerm, pagination)
+</script>
+```
+
+**❌ Bad Practice:** Putting everything in one component
+
+```vue
+<script setup>
+// Component handles everything: search, pagination, and data fetching
+const searchTerm = ref('')
+const currentPage = ref(1)
+const isLoading = ref(true)
+const data = ref([])
+
+function handleSearch() {
+  /* search logic mixed with other concerns */
+}
+function changePage() {
+  /* pagination logic mixed with other concerns */
+}
+function fetchData() {
+  /* data fetching mixed with other concerns */
+}
+</script>
+```
+
+---
+
+### Open-Closed Principle (OCP)
+
+Code should be open for extension but closed for modification.
+
+**✅ Good Practice:** Creating extensible composables
+
+```ts
+// A composable that can be extended with different implementations
+export function useDataSource<T>(fetcher: () => Promise<T[]>) {
+  const data = ref<T[]>([])
+  const isLoading = ref(false)
+
+  async function loadData() {
+    isLoading.value = true
+    try {
+      data.value = await fetcher()
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  return { data, isLoading, loadData }
+}
+
+// Usage with different data sources
+const bookStore = useDataSource(() => fetchBooks())
+const userStore = useDataSource(() => fetchUsers())
+```
+
+**❌ Bad Practice:** Hardcoding implementation details
+
+```ts
+// Tightly coupled to a specific data source
+export function useBookData() {
+  const books = ref([])
+
+  async function loadBooks() {
+    books.value = await fetch('/api/books').then((r) => r.json())
+  }
+
+  return { books, loadBooks }
+}
+```
+
+---
+
+### Liskov Substitution Principle (LSP)
+
+Components should be replaceable with their subtypes without affecting correctness.
+
+**✅ Good Practice:** Consistent props and emits interfaces
+
+```vue
+<!-- BaseList.vue -->
+<script setup>
+defineProps({
+  items: { type: Array, required: true },
+  loading: { type: Boolean, default: false },
+})
+defineEmits(['item-selected'])
+</script>
+
+<!-- BookList.vue - follows same interface -->
+<script setup>
+defineProps({
+  items: { type: Array, required: true },
+  loading: { type: Boolean, default: false },
+})
+defineEmits(['item-selected'])
+</script>
+```
+
+**❌ Bad Practice:** Inconsistent interfaces
+
+```vue
+<!-- BookList requires different props than ProductList -->
+<BookList :books="books" :isLoading="loading" @select="handleSelect" />
+<ProductList :productItems="products" :loadingState="loading" @item-click="handleSelect" />
+```
+
+---
+
+### Interface Segregation Principle (ISP)
+
+Components shouldn't be forced to depend on interfaces they don't use.
+
+**✅ Good Practice:** Tailored composables
+
+```ts
+// Specific search composable
+export function useSearch() {
+  const term = ref('')
+  const handleInput = (e) => {
+    term.value = e.target.value
+  }
+  return { term, handleInput }
+}
+
+// Specific pagination composable
+export function usePagination() {
+  const page = ref(1)
+  const changePage = (newPage) => {
+    page.value = newPage
+  }
+  return { page, changePage }
+}
+```
+
+**❌ Bad Practice:** Monolithic store with unused features
+
+```ts
+// Component must import the whole store even if it only needs search
+import { useStore } from './store'
+
+const store = useStore()
+// Only uses search but gets pagination, filtering, etc.
+const search = () => store.setSearchTerm(term.value)
+```
+
+---
+
+### Dependency Inversion Principle (DIP)
+
+High-level modules shouldn't depend on low-level modules.
+
+**✅ Good Practice:** Injecting dependencies
+
+```ts
+// Component depends on abstraction, not implementation
+export function useBookData(searchProvider, paginationProvider, apiClient) {
+  const fetchBooks = async () => {
+    const params = {
+      term: searchProvider.term.value,
+      page: paginationProvider.page.value,
+    }
+    return await apiClient.getBooks(params)
+  }
+
+  return { fetchBooks }
+}
+```
+
+**❌ Bad Practice:** Direct dependency on implementations
+
+```ts
+// Directly depends on specific implementations
+import { searchStore } from './searchStore'
+import { paginationStore } from './paginationStore'
+import { apiClient } from './apiClient'
+
+export function useBookData() {
+  const fetchBooks = async () => {
+    const params = {
+      term: searchStore.term,
+      page: paginationStore.page,
+    }
+    return await apiClient.getBooks(params)
+  }
+
+  return { fetchBooks }
+}
+```
+
+---
+
+## Component Structure
+
+### Component Organization
+
+**✅ Good Practice:** Well-structured components
+
+```vue
+<script setup>
+// 1. Imports
+import { ref, computed, onMounted } from 'vue'
+import { useFeatureA } from '@/composables/useFeatureA'
+
+// 2. Props and emits
+const props = defineProps({
+  /* ... */
+})
+const emit = defineEmits(['update'])
+
+// 3. Composable usage
+const { featureData, featureMethod } = useFeatureA()
+
+// 4. Refs and reactive state
+const localState = ref(null)
+
+// 5. Computed properties
+const derivedValue = computed(() => {
+  /* ... */
+})
+
+// 6. Methods
+function handleAction() {
+  /* ... */
+}
+
+// 7. Lifecycle hooks
+onMounted(() => {
+  /* ... */
+})
+</script>
+
+<template>
+  <div>
+    <!-- Structured template -->
+  </div>
+</template>
+```
+
+**❌ Bad Practice:** Unorganized component
+
+```vue
+<script setup>
+// Imports scattered throughout code
+import { onMounted } from 'vue'
+const localState = ref(null)
+// Random import in the middle
+import SomeComponent from './SomeComponent.vue'
+// No clear organization
+function someHandler() {
+  /* ... */
+}
+// Another random import
+import { useStore } from 'vuex'
+</script>
+```
+
+---
+
+## Composables Design
+
+### Purpose-Driven Composables
+
+**✅ Good Practice:** Focused composables
+
+```ts
+// useSearch.ts - Focused on search functionality
+export function useSearch(callback) {
+  const searchTerm = ref('')
+  const debounceTimeout = ref(null)
+
+  function handleSearch(event) {
+    const value = event.target.value
+    searchTerm.value = value
+
+    if (debounceTimeout.value) {
+      clearTimeout(debounceTimeout.value)
+    }
+
+    debounceTimeout.value = setTimeout(() => {
+      callback()
+    }, 300)
+  }
+
+  return { searchTerm, handleSearch }
+}
+```
+
+**❌ Bad Practice:** Overly broad composables
+
+```ts
+// useBookFeatures.ts - Doing too many things
+export function useBookFeatures() {
+  // Search, pagination, filtering, and data fetching all in one
+  // ... (violates SRP)
+}
+```
+
+---
+
+## State Management
+
+### Local vs. Shared State
+
+**✅ Good Practice:** Appropriate state location
+
+```ts
+// Local component state for UI-specific concerns
+const isDropdownOpen = ref(false)
+
+// Shared state through composables for cross-component concerns
+const { user, login, logout } = useAuth()
+```
+
+**❌ Bad Practice:** Misplaced state
+
+```ts
+// Global store for UI-specific concerns
+const store = useStore()
+store.commit('TOGGLE_DROPDOWN')
+
+// Or local state for shared concerns
+const userData = ref(null)
+fetch('/api/user')
+  .then((r) => r.json())
+  .then((data) => (userData.value = data))
+```
+
+---
+
+## Performance Optimization
+
+### Efficient Rendering
+
+**✅ Good Practice:** Use v-memo and computed properties
+
+```vue
+<template>
+  <!-- Use v-memo to prevent unnecessary re-renders -->
+  <div v-memo="[items.length, currentPage]">
+    <Item v-for="item in paginatedItems" :key="item.id" :item="item" />
+  </div>
+</template>
+
+<script setup>
+// Compute derived data instead of recalculating in template
+const paginatedItems = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  return items.value.slice(start, start + pageSize.value)
+})
+</script>
+```
+
+**❌ Bad Practice:** Inefficient rendering
+
+```vue
+<template>
+  <!-- No optimization, rerenders on any reactive change -->
+  <div>
+    <Item
+      v-for="item in items.slice((currentPage - 1) * pageSize, currentPage * pageSize)"
+      :key="item.id"
+      :item="item"
+    />
+  </div>
+</template>
+```
+
+---
+
+## Code Consistency
+
+### Naming Conventions
+
+**✅ Good Practice:** Consistent naming
+
+```vue
+<!-- Components: PascalCase -->
+<UserProfile />
+
+<script setup>
+// Props: camelCase
+const props = defineProps({
+  userData: Object,
+  isLoading: Boolean,
+})
+
+// Methods: camelCase verb phrases
+function handleSubmit() {
+  /* ... */
+}
+
+// Composables: use* prefix
+const { user, isAdmin } = useUserData()
+</script>
+```
+
+**❌ Bad Practice:** Inconsistent naming
+
+```vue
+<!-- Mixed casing for components -->
+<user-profile />
+<UserDetails />
+
+<script setup>
+// Inconsistent prop naming
+const props = defineProps({
+  UserData: Object,
+  is_loading: Boolean,
+})
+
+// Inconsistent method naming
+function SubmitForm() {
+  /* ... */
+}
+function process_data() {
+  /* ... */
+}
+</script>
+```
+
+---
+
+## Accessibility and Best Practices
+
+### Accessible Components
+
+**✅ Good Practice:** Accessible and semantic HTML
+
+```vue
+<template>
+  <section aria-labelledby="section-title">
+    <h2 id="section-title">Book Collection</h2>
+
+    <div role="status" v-if="isLoading">Loading...</div>
+
+    <ul v-else>
+      <li v-for="book in books" :key="book.id">
+        <button @click="selectBook(book)" :aria-pressed="book.isSelected">
+          {{ book.title }}
+        </button>
+      </li>
+    </ul>
+  </section>
+</template>
+```
+
+**❌ Bad Practice:** Non-semantic HTML
+
+```vue
+<template>
+  <div>
+    <div>Book Collection</div>
+
+    <div v-if="isLoading">Loading...</div>
+
+    <div v-else>
+      <div v-for="book in books" :key="book.id">
+        <div @click="selectBook(book)">{{ book.title }}</div>
+      </div>
+    </div>
+  </div>
+</template>
+```
+
+---
+
+## Error Handling
+
+### Centralized Error Handling
+
+**✅ Good Practice:** Use a dedicated error handling composable
+
+```ts
+// composables/useErrorHandler.ts
+export function useErrorHandler() {
+  const error = ref<Error | null>(null)
+
+  function handleError(err: Error, context?: string) {
+    error.value = err
+    console.error(`Error in ${context}:`, err)
+
+    if (import.meta.env.PROD) {
+      // logToSentry(err, context)
+    }
+  }
+
+  async function withErrorHandling<T>(fn: () => Promise<T>, context: string): Promise<T | null> {
+    try {
+      return await fn()
+    } catch (err) {
+      handleError(err as Error, context)
+      return null
+    }
+  }
+
+  function safeExecute<T>(fn: () => T, context: string, fallback?: T): T | undefined {
+    try {
+      return fn()
+    } catch (err) {
+      handleError(err as Error, context)
+      return fallback
+    }
+  }
+
+  return { error, handleError, withErrorHandling, safeExecute }
+}
+```
+
+**❌ Bad Practice:** Repetitive try-catch blocks everywhere
+
+```ts
+// Duplicated error handling in every function
+async function fetchBooks() {
+  try {
+    const result = await getBooks(params)
+    booksList.value = result.books
+  } catch (err) {
+    error.value = 'Failed'
+    console.error(err)
+  }
+}
+```
+
+---
+
+### Component Error Boundaries
+
+**✅ Good Practice:** Use onErrorCaptured
+
+```vue
+<script setup lang="ts">
+import { onErrorCaptured } from 'vue'
+import { useErrorHandler } from '@/composables/useErrorHandler'
+
+const { error, handleError, clearError } = useErrorHandler()
+
+onErrorCaptured((err, instance, info) => {
+  handleError(err, `Component.${info}`)
+  return false
+})
+</script>
+
+<template>
+  <div v-if="error">
+    {{ error.message }}
+    <button @click="clearError">Dismiss</button>
+  </div>
+</template>
+```
+
+**❌ Bad Practice:** No error boundaries - errors crash app
+
+---
+
+### Global Error Handler
+
+**✅ Good Practice:** Set up in main.ts
+
+```ts
+const app = createApp(App)
+
+app.config.errorHandler = (err, instance, info) => {
+  console.error('Global error:', err)
+  if (import.meta.env.PROD) {
+    // trackError(err)
+  }
+}
+
+window.addEventListener('unhandledrejection', (event) => {
+  console.error('Unhandled rejection:', event.reason)
+  event.preventDefault()
+})
+```
+
+**Key Principles:**
+
+- Centralize error handling logic
+- Fail gracefully with fallbacks
+- Log in dev, track in production
+- Show user-friendly error messages
+
+---
+
+## Conclusion
+
+Following these guidelines and SOLID principles will lead to more maintainable, testable, and scalable Vue applications. Remember that the ultimate goal is code that is easy to understand, modify, and extend as requirements evolve.
+
+**Key Takeaways:**
+
+1. **Priority A rules are non-negotiable** - They prevent errors
+2. **Priority B rules improve readability** - They make code easier to maintain
+3. **Priority C rules ensure consistency** - Choose one approach and stick to it
+4. **Priority D rules require caution** - Use sparingly and with awareness
+5. **SOLID principles guide architecture** - They ensure scalable design
+6. **Composables promote reusability** - Single-responsibility composables are key
+7. **Error handling is essential** - Centralize and handle gracefully
+8. **Accessibility matters** - Use semantic HTML and ARIA attributes
+
+## References
+
+- [Vue.js Official Style Guide](https://vuejs.org/style-guide/)
+- [Vue.js Priority A Rules](https://vuejs.org/style-guide/rules-essential.html)
+- [Vue.js Priority B Rules](https://vuejs.org/style-guide/rules-strongly-recommended.html)
+- [Vue.js Priority C Rules](https://vuejs.org/style-guide/rules-recommended.html)
+- [Vue.js Priority D Rules](https://vuejs.org/style-guide/rules-use-with-caution.html)

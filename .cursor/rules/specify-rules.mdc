@@ -1,0 +1,24 @@
+# ai-web-development Development Guidelines
+
+Auto-generated from all feature plans. Last updated: 2025-10-07
+
+## Active Technologies
+- TypeScript 5.x with Vue.js 3.5+ (Composition API) + Vue Router 4.5+, Vite 7.x, Tailwind CSS 4.x (001-show-details-of)
+
+## Project Structure
+```
+src/
+tests/
+```
+
+## Commands
+npm test [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECHNOLOGIES] npm run lint
+
+## Code Style
+TypeScript 5.x with Vue.js 3.5+ (Composition API): Follow standard conventions
+
+## Recent Changes
+- 001-show-details-of: Added TypeScript 5.x with Vue.js 3.5+ (Composition API) + Vue Router 4.5+, Vite 7.x, Tailwind CSS 4.x
+
+<!-- MANUAL ADDITIONS START -->
+<!-- MANUAL ADDITIONS END -->

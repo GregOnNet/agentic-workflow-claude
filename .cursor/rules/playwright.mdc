@@ -1,0 +1,1162 @@
+# Playwright Testing Guidelines: Best Practices for Robust UI Testing
+
+## Introduction
+
+This document provides comprehensive guidelines for writing high-quality Playwright tests. These guidelines are based on industry best practices and the official Playwright recommendations, designed to ensure tests are maintainable, reliable, and efficient.
+
+## Core Testing Principles
+
+### Test Philosophy
+
+- **User-Centric:** Tests should mimic real user interactions and expectations
+- **Resilient:** Tests should be stable and not prone to flakiness
+- **Isolated:** Each test should be independent and able to run in any order
+- **Maintainable:** Tests should be easy to understand and update
+- **Fast:** Tests should execute efficiently without unnecessary waits
+
+## 1. Selector Strategy Hierarchy
+
+Follow this hierarchy from most preferred to least preferred:
+
+### Priority 1: Role-Based Selectors (ARIA)
+
+**✅ Good Practice:** Use `getByRole()` as the primary selector
+
+```typescript
+// Best: Accessible to users and screen readers
+await page.getByRole('button', { name: 'Submit' }).click()
+await page.getByRole('heading', { name: 'Welcome' }).isVisible()
+await page.getByRole('textbox', { name: 'Email' }).fill('user@example.com')
+await page.getByRole('link', { name: 'Learn more' }).click()
+
+// With additional attributes
+await page.getByRole('button', { name: 'Delete', exact: true }).click()
+await page.getByRole('checkbox', { name: 'Accept terms', checked: true })
+```
+
+**❌ Bad Practice:** Ignoring semantic HTML roles
+
+```typescript
+// Fragile: Depends on implementation details
+await page.locator('button.submit-btn').click()
+await page.locator('.header h1').isVisible()
+await page.locator('#email-input').fill('user@example.com')
+```
+
+### Priority 2: Label-Based Selectors
+
+**✅ Good Practice:** Use `getByLabel()` for form inputs
+
+```typescript
+// Accessible and semantic
+await page.getByLabel('Email address').fill('user@example.com')
+await page.getByLabel('Password', { exact: true }).fill('secret123')
+await page.getByLabel(/agree to terms/i).check()
+```
+
+**❌ Bad Practice:** Using IDs or classes for form inputs
+
+```typescript
+// Brittle and non-semantic
+await page.locator('#email').fill('user@example.com')
+await page.locator('.password-input').fill('secret123')
+```
+
+### Priority 3: Text-Based Selectors
+
+**✅ Good Practice:** Use `getByText()` for visible text content
+
+```typescript
+// For links and buttons with unique text
+await page.getByText('Sign in').click()
+await page.getByText('Welcome back, John').isVisible()
+
+// With partial matching
+await page.getByText(/welcome back/i).isVisible()
+```
+
+**❌ Bad Practice:** Using text selectors for dynamic or translated content
+
+```typescript
+// Fragile: Breaks when text changes or is translated
+await page.locator('text=Click here to continue').click()
+```
+
+### Priority 4: Test ID Selectors
+
+**✅ Good Practice:** Use `data-testid` for non-semantic or complex elements
+
+```typescript
+// When ARIA roles are insufficient
+await page.getByTestId('user-avatar').click()
+await page.getByTestId('book-card-123').isVisible()
+await page.getByTestId('kanban-column-reading').dragTo(page.getByTestId('kanban-column-finished'))
+
+// For dynamic lists and complex components
+const items = page.getByTestId('product-item')
+await expect(items).toHaveCount(10)
+```
+
+**❌ Bad Practice:** Using test IDs as the first choice
+
+```typescript
+// Unnecessary: ARIA role would be better
+await page.getByTestId('submit-button').click() // Use getByRole('button')
+
+// Overkill: Label-based selector would be better
+await page.getByTestId('email-input').fill('email@test.com') // Use getByLabel()
+```
+
+### Priority 5: CSS/XPath Selectors (Last Resort)
+
+**✅ Good Practice:** Use only when no other option is available
+
+```typescript
+// Complex layout-dependent scenarios
+await page.locator('nav >> a >> nth=2').click()
+await page.locator('div.card:has(h3:text("Featured"))').isVisible()
+
+// For third-party components without good attributes
+await page.locator('[class*="DatePicker__input"]').fill('2024-01-01')
+```
+
+**❌ Bad Practice:** Using as the default selector strategy
+
+```typescript
+// Fragile: Tightly coupled to implementation
+await page.locator('.container > .row:nth-child(2) > .col-md-6 > button').click()
+await page.locator('div[class="app-header__user-menu"]').click()
+```
+
+### Selector Best Practices Summary
+
+**✅ Good Practice:** Comprehensive selector example
+
+```typescript
+// test-id added to component for testing
+// <div data-testid="book-card" role="article">
+//   <h3>{{ book.title }}</h3>
+//   <button aria-label="Add to favorites">★</button>
+//   <a href="/details" aria-label="View details">Details</a>
+// </div>
+
+// Test using appropriate selectors
+test('should interact with book card', async ({ page }) => {
+  const card = page.getByTestId('book-card')
+  await expect(card).toBeVisible()
+
+  // Use role for interactive elements
+  await card.getByRole('button', { name: 'Add to favorites' }).click()
+  await card.getByRole('link', { name: 'View details' }).click()
+
+  // Use text for content verification
+  await expect(card.getByText('The Great Gatsby')).toBeVisible()
+})
+```
+
+**❌ Bad Practice:** Mixing selector strategies inconsistently
+
+```typescript
+// Inconsistent and hard to maintain
+test('should interact with book card', async ({ page }) => {
+  await page.locator('#book-card-1').click()
+  await page.locator('.favorite-btn').click()
+  await page.locator('a[href="/details"]').click()
+  await expect(page.locator('div.title')).toHaveText('The Great Gatsby')
+})
+```
+
+## 2. Page Object Model (POM) Guidelines
+
+### POM Structure
+
+**✅ Good Practice:** Well-organized page object with clear responsibilities
+
+```typescript
+// e2e/pages/BooksPage.ts
+import { Page, Locator, expect } from '@playwright/test'
+
+export class BooksPage {
+  readonly page: Page
+  readonly searchInput: Locator
+  readonly bookCards: Locator
+  readonly paginationNext: Locator
+  readonly filterDropdown: Locator
+
+  constructor(page: Page) {
+    this.page = page
+
+    // Locators defined once
+    this.searchInput = page.getByRole('searchbox', { name: 'Search books' })
+    this.bookCards = page.getByTestId('book-card')
+    this.paginationNext = page.getByRole('button', { name: 'Next page' })
+    this.filterDropdown = page.getByRole('combobox', { name: 'Filter by status' })
+  }
+
+  // Navigation methods
+  async goto() {
+    await this.page.goto('/books')
+    await this.waitForLoad()
+  }
+
+  // Action methods
+  async searchBooks(query: string) {
+    await this.searchInput.fill(query)
+    await this.searchInput.press('Enter')
+    await this.waitForLoad()
+  }
+
+  async selectFilter(status: string) {
+    await this.filterDropdown.selectOption(status)
+    await this.waitForLoad()
+  }
+
+  async clickBook(title: string) {
+    await this.getBookByTitle(title).click()
+  }
+
+  async goToNextPage() {
+    await this.paginationNext.click()
+    await this.waitForLoad()
+  }
+
+  // Query methods
+  getBookByTitle(title: string): Locator {
+    return this.bookCards.filter({ hasText: title })
+  }
+
+  async getVisibleBookCount(): Promise<number> {
+    return await this.bookCards.count()
+  }
+
+  // Assertion methods
+  async expectBookToBeVisible(title: string) {
+    await expect(this.getBookByTitle(title)).toBeVisible()
+  }
+
+  async expectPageToBeActive(pageNumber: number) {
+    const activeButton = this.page.getByRole('button', {
+      name: `Page ${pageNumber}`,
+      pressed: true,
+    })
+    await expect(activeButton).toBeVisible()
+  }
+
+  // Helper methods
+  private async waitForLoad() {
+    // Wait for loading spinner to disappear
+    await this.page.waitForLoadState('networkidle')
+    await expect(this.page.getByTestId('loading-spinner')).toBeHidden()
+  }
+}
+```
+
+**❌ Bad Practice:** Poorly structured page object
+
+```typescript
+// Everything mixed together, hard to maintain
+export class BooksPage {
+  constructor(public page: Page) {}
+
+  async doEverything(query: string) {
+    await this.page.goto('/books')
+    await this.page.locator('#search').fill(query)
+    await this.page.locator('button.search-btn').click()
+    await this.page.waitForTimeout(2000) // Hard-coded wait
+    const count = await this.page.locator('.book-card').count()
+    return count
+  }
+}
+```
+
+### POM Component Pattern
+
+**✅ Good Practice:** Extract reusable components
+
+```typescript
+// e2e/components/BookCard.ts
+export class BookCard {
+  constructor(private readonly locator: Locator) {}
+
+  get title() {
+    return this.locator.getByRole('heading')
+  }
+
+  get author() {
+    return this.locator.getByTestId('author')
+  }
+
+  get favoriteButton() {
+    return this.locator.getByRole('button', { name: 'Add to favorites' })
+  }
+
+  async clickDetails() {
+    await this.locator.getByRole('link', { name: 'View details' }).click()
+  }
+
+  async addToFavorites() {
+    await this.favoriteButton.click()
+    await expect(this.favoriteButton).toHaveAttribute('aria-pressed', 'true')
+  }
+}
+
+// e2e/pages/BooksPage.ts
+export class BooksPage {
+  // ... other code ...
+
+  getBookCard(index: number): BookCard {
+    return new BookCard(this.bookCards.nth(index))
+  }
+
+  getBookCardByTitle(title: string): BookCard {
+    return new BookCard(this.bookCards.filter({ hasText: title }))
+  }
+}
+
+// Usage in test
+test('should interact with book card', async ({ page }) => {
+  const booksPage = new BooksPage(page)
+  await booksPage.goto()
+
+  const firstBook = booksPage.getBookCard(0)
+  await expect(firstBook.title).toHaveText('The Great Gatsby')
+  await firstBook.addToFavorites()
+})
+```
+
+**❌ Bad Practice:** Duplicating component logic
+
+```typescript
+// Same logic repeated in multiple places
+await page.getByTestId('book-card').first().getByRole('button').click()
+await page.getByTestId('book-card').nth(1).getByRole('button').click()
+```
+
+## 3. Test Structure Principles
+
+### AAA Pattern (Arrange-Act-Assert)
+
+**✅ Good Practice:** Clear three-phase structure
+
+```typescript
+test('should filter books by reading status', async ({ page }) => {
+  // Arrange: Set up test data and navigate
+  const booksPage = new BooksPage(page)
+  await booksPage.goto()
+  await expect(booksPage.bookCards).toHaveCount(10)
+
+  // Act: Perform the action being tested
+  await booksPage.selectFilter('reading')
+
+  // Assert: Verify the expected outcome
+  await expect(booksPage.bookCards).toHaveCount(3)
+  await booksPage.expectBookToBeVisible('1984')
+  await booksPage.expectBookToBeVisible('Brave New World')
+})
+```
+
+**❌ Bad Practice:** Mixed structure without clear phases
+
+```typescript
+test('filter books', async ({ page }) => {
+  await page.goto('/books')
+  await expect(page.locator('.book')).toHaveCount(10)
+  await page.selectOption('#filter', 'reading')
+  await page.click('.refresh')
+  await expect(page.locator('.book')).toHaveCount(3)
+  await page.click('.book >> nth=0')
+  await expect(page).toHaveURL(/.*details/)
+})
+```
+
+### Test Naming
+
+**✅ Good Practice:** Descriptive test names
+
+```typescript
+// Pattern: should [expected behavior] when [condition]
+test('should display error message when login fails', async ({ page }) => {})
+test('should navigate to book details when clicking book card', async ({ page }) => {})
+test('should persist reading status after page reload', async ({ page }) => {})
+
+// Or: describes [feature] - [scenario]
+test.describe('Book Search', () => {
+  test('should filter results as user types', async ({ page }) => {})
+  test('should show "no results" message when search yields nothing', async ({ page }) => {})
+  test('should clear results when search is cleared', async ({ page }) => {})
+})
+```
+
+**❌ Bad Practice:** Vague or implementation-focused names
+
+```typescript
+test('test1', async ({ page }) => {})
+test('clicks button', async ({ page }) => {})
+test('checks if searchBooks function works', async ({ page }) => {})
+```
+
+### Test Organization
+
+**✅ Good Practice:** Logical grouping with describe blocks
+
+```typescript
+// e2e/books.spec.ts
+import { test, expect } from '@playwright/test'
+import { BooksPage } from './pages/BooksPage'
+
+test.describe('Books Page', () => {
+  let booksPage: BooksPage
+
+  test.beforeEach(async ({ page }) => {
+    booksPage = new BooksPage(page)
+    await booksPage.goto()
+  })
+
+  test.describe('Search Functionality', () => {
+    test('should display matching books when searching', async () => {
+      await booksPage.searchBooks('gatsby')
+      await expect(booksPage.bookCards).toHaveCount(1)
+      await booksPage.expectBookToBeVisible('The Great Gatsby')
+    })
+
+    test('should show empty state when no results found', async ({ page }) => {
+      await booksPage.searchBooks('nonexistentbook')
+      await expect(page.getByText('No books found')).toBeVisible()
+    })
+  })
+
+  test.describe('Pagination', () => {
+    test('should load next page when clicking next button', async () => {
+      const firstPageFirstBook = await booksPage.getBookCard(0).title.textContent()
+
+      await booksPage.goToNextPage()
+
+      const secondPageFirstBook = await booksPage.getBookCard(0).title.textContent()
+      expect(firstPageFirstBook).not.toBe(secondPageFirstBook)
+    })
+  })
+})
+```
+
+**❌ Bad Practice:** Flat structure without organization
+
+```typescript
+test('search test 1', async ({ page }) => {})
+test('pagination test', async ({ page }) => {})
+test('another search test', async ({ page }) => {})
+test('more pagination stuff', async ({ page }) => {})
+```
+
+## 4. Test Independence Rules
+
+### Isolated Tests
+
+**✅ Good Practice:** Each test sets up its own state
+
+```typescript
+test.describe('Book Management', () => {
+  // Use test.beforeEach for shared setup
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/books')
+    // Each test gets a fresh start
+  })
+
+  test('should add book to reading list', async ({ page }) => {
+    // This test doesn't depend on any other test
+    const booksPage = new BooksPage(page)
+    await booksPage.clickBook('1984')
+    await page.getByRole('button', { name: 'Add to Reading' }).click()
+
+    await page.goto('/reading-list')
+    await expect(page.getByText('1984')).toBeVisible()
+  })
+
+  test('should remove book from favorites', async ({ page }) => {
+    // Independent: Sets up its own state
+    const booksPage = new BooksPage(page)
+
+    // Setup: Add to favorites first
+    await booksPage.clickBook('Brave New World')
+    await page.getByRole('button', { name: 'Add to Favorites' }).click()
+
+    // Test: Remove from favorites
+    await page.getByRole('button', { name: 'Remove from Favorites' }).click()
+    await expect(page.getByText('Removed from favorites')).toBeVisible()
+  })
+})
+```
+
+**❌ Bad Practice:** Tests depend on execution order
+
+```typescript
+// BAD: Test 2 depends on Test 1 running first
+test('should add book to favorites', async ({ page }) => {
+  await page.goto('/books')
+  await page.getByText('1984').click()
+  await page.getByRole('button', { name: 'Favorite' }).click()
+})
+
+test('should display book in favorites list', async ({ page }) => {
+  // This will fail if previous test didn't run!
+  await page.goto('/favorites')
+  await expect(page.getByText('1984')).toBeVisible()
+})
+```
+
+### Storage State Management
+
+**✅ Good Practice:** Use fixtures for authentication
+
+```typescript
+// playwright.config.ts
+export default defineConfig({
+  projects: [
+    {
+      name: 'setup',
+      testMatch: '**/*.setup.ts',
+    },
+    {
+      name: 'authenticated',
+      use: {
+        storageState: '.auth/user.json',
+      },
+      dependencies: ['setup'],
+    },
+  ],
+})
+
+// e2e/auth.setup.ts
+import { test as setup } from '@playwright/test'
+
+setup('authenticate', async ({ page }) => {
+  await page.goto('/login')
+  await page.getByLabel('Email').fill('user@example.com')
+  await page.getByLabel('Password').fill('password')
+  await page.getByRole('button', { name: 'Sign in' }).click()
+
+  await page.waitForURL('/dashboard')
+  await page.context().storageState({ path: '.auth/user.json' })
+})
+
+// Tests automatically use authenticated state
+test('should access protected page', async ({ page }) => {
+  await page.goto('/dashboard')
+  await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible()
+})
+```
+
+**❌ Bad Practice:** Logging in for every test
+
+```typescript
+// Slow and repetitive
+test('test 1', async ({ page }) => {
+  await page.goto('/login')
+  await page.fill('#email', 'user@example.com')
+  await page.fill('#password', 'password')
+  await page.click('button[type=submit]')
+  await page.waitForURL('/dashboard')
+  // Actual test starts here...
+})
+
+test('test 2', async ({ page }) => {
+  // Same login repeated
+  await page.goto('/login')
+  await page.fill('#email', 'user@example.com')
+  // ...
+})
+```
+
+## 5. Assertion Best Practices
+
+### Web-First Assertions
+
+**✅ Good Practice:** Use Playwright's auto-waiting assertions
+
+```typescript
+// Automatically waits until condition is met
+await expect(page.getByRole('button', { name: 'Submit' })).toBeVisible()
+await expect(page.getByRole('button', { name: 'Submit' })).toBeEnabled()
+await expect(page.getByRole('heading')).toHaveText('Welcome')
+await expect(page).toHaveURL(/.*dashboard/)
+await expect(page).toHaveTitle(/Dashboard/)
+
+// With custom timeout
+await expect(page.getByTestId('success-message')).toBeVisible({ timeout: 10000 })
+
+// Multiple assertions
+const button = page.getByRole('button', { name: 'Submit' })
+await expect(button).toBeVisible()
+await expect(button).toBeEnabled()
+await expect(button).toHaveAttribute('type', 'submit')
+```
+
+**❌ Bad Practice:** Manual waits and generic assertions
+
+```typescript
+// Fragile and slow
+await page.waitForTimeout(3000)
+const button = await page.locator('button').isVisible()
+expect(button).toBe(true)
+
+// No auto-waiting
+const text = await page.locator('h1').textContent()
+expect(text).toBe('Welcome')
+```
+
+### Negative Assertions
+
+**✅ Good Practice:** Use negative assertions correctly
+
+```typescript
+// Waits for element to be hidden
+await expect(page.getByTestId('loading-spinner')).toBeHidden()
+await expect(page.getByText('Error message')).not.toBeVisible()
+
+// Verify element doesn't exist
+await expect(page.getByRole('button', { name: 'Delete' })).toHaveCount(0)
+
+// Verify attribute
+await expect(page.getByRole('button')).not.toBeDisabled()
+```
+
+**❌ Bad Practice:** Incorrect negative assertions
+
+```typescript
+// Will fail immediately if element exists
+await expect(page.locator('.error')).not.toBeVisible()
+
+// Should use toHaveCount(0) instead
+const count = await page.locator('.item').count()
+expect(count).toBe(0)
+```
+
+### Assertion Specificity
+
+**✅ Good Practice:** Assert on specific, meaningful conditions
+
+```typescript
+test('should submit form successfully', async ({ page }) => {
+  await page.goto('/contact')
+
+  // Fill form
+  await page.getByLabel('Name').fill('John Doe')
+  await page.getByLabel('Email').fill('john@example.com')
+  await page.getByRole('button', { name: 'Submit' }).click()
+
+  // Specific assertions
+  await expect(page).toHaveURL('/contact/success')
+  await expect(page.getByRole('heading')).toHaveText('Thank you!')
+  await expect(page.getByText(/we'll get back to you/i)).toBeVisible()
+
+  // Verify form is reset/hidden
+  await expect(page.getByLabel('Name')).not.toBeVisible()
+})
+```
+
+**❌ Bad Practice:** Vague or insufficient assertions
+
+```typescript
+test('submit form', async ({ page }) => {
+  await page.goto('/contact')
+  await page.fill('#name', 'John')
+  await page.fill('#email', 'john@example.com')
+  await page.click('button')
+
+  // Too vague
+  await expect(page.locator('div')).toBeVisible()
+})
+```
+
+## 6. Wait Strategy Guidelines
+
+### Auto-Waiting (Preferred)
+
+**✅ Good Practice:** Rely on built-in auto-waiting
+
+```typescript
+// Playwright automatically waits for:
+// - Element to be attached to DOM
+// - Element to be visible
+// - Element to be stable (not animating)
+// - Element to receive events (not obscured)
+// - Element to be enabled (for inputs)
+
+await page.getByRole('button').click() // Waits automatically
+await page.getByLabel('Email').fill('test@example.com') // Waits automatically
+await expect(page.getByText('Success')).toBeVisible() // Waits with timeout
+```
+
+**❌ Bad Practice:** Manual waits
+
+```typescript
+// Unnecessary and fragile
+await page.waitForTimeout(2000)
+await page.click('button')
+
+await page.waitForTimeout(5000)
+const text = await page.locator('h1').textContent()
+```
+
+### Explicit Waits (When Needed)
+
+**✅ Good Practice:** Use specific wait conditions
+
+```typescript
+// Wait for network to be idle (after data fetch)
+await page.waitForLoadState('networkidle')
+
+// Wait for specific request
+await page.waitForResponse((resp) => resp.url().includes('/api/books') && resp.status() === 200)
+
+// Wait for navigation
+await Promise.all([page.waitForNavigation(), page.getByRole('link', { name: 'Next page' }).click()])
+
+// Wait for element state
+await page.getByTestId('data-table').waitFor({ state: 'visible' })
+
+// Wait for function
+await page.waitForFunction(() => {
+  return document.querySelectorAll('.book-card').length > 10
+})
+```
+
+**❌ Bad Practice:** Arbitrary timeouts
+
+```typescript
+// Magic numbers with no clear reason
+await page.waitForTimeout(1000)
+await page.waitForTimeout(500)
+await page.waitForTimeout(3000)
+```
+
+### Handling Loading States
+
+**✅ Good Practice:** Wait for loading to complete
+
+```typescript
+test('should load book data', async ({ page }) => {
+  const booksPage = new BooksPage(page)
+  await booksPage.goto()
+
+  // Wait for loading spinner to disappear
+  const loadingSpinner = page.getByTestId('loading-spinner')
+  await expect(loadingSpinner).toBeVisible() // Verify loading started
+  await expect(loadingSpinner).toBeHidden() // Wait for it to finish
+
+  // Now assert on data
+  await expect(page.getByTestId('book-card')).toHaveCount(10)
+})
+```
+
+**❌ Bad Practice:** Not handling loading states
+
+```typescript
+test('load books', async ({ page }) => {
+  await page.goto('/books')
+  // Race condition: might check before data loads
+  await expect(page.getByTestId('book-card')).toHaveCount(10)
+})
+```
+
+## 7. Naming Conventions
+
+### File Naming
+
+**✅ Good Practice:** Consistent and descriptive file names
+
+```
+e2e/
+├── pages/
+│   ├── BooksPage.ts           # PascalCase for classes
+│   ├── KanbanPage.ts
+│   └── LoginPage.ts
+├── components/
+│   ├── BookCard.ts
+│   └── Pagination.ts
+├── fixtures/
+│   └── testData.ts            # camelCase for utilities
+├── auth.setup.ts              # Special setup files
+├── books.spec.ts              # Feature.spec.ts pattern
+├── kanban.spec.ts
+└── search.spec.ts
+```
+
+**❌ Bad Practice:** Inconsistent naming
+
+```
+e2e/
+├── Books_page.ts              # Mixed conventions
+├── kanban.ts                  # Missing suffix
+├── test-login.spec.ts         # Inconsistent separator
+└── SEARCH_TESTS.spec.ts       # Wrong case
+```
+
+### Variable and Function Naming
+
+**✅ Good Practice:** Clear, descriptive names
+
+```typescript
+// Page Objects: PascalCase
+class BooksPage {}
+class KanbanBoard {}
+
+// Locators: camelCase, descriptive
+const searchInput = page.getByRole('searchbox')
+const submitButton = page.getByRole('button', { name: 'Submit' })
+const bookCards = page.getByTestId('book-card')
+
+// Methods: camelCase, verb-first
+async function navigateToBooks() {}
+async function fillSearchForm(query: string) {}
+async function waitForDataLoad() {}
+
+// Test data: camelCase
+const validUser = { email: 'user@test.com', password: 'pass123' }
+const mockBooks = [{ id: 1, title: 'Book 1' }]
+
+// Constants: UPPER_SNAKE_CASE
+const DEFAULT_TIMEOUT = 5000
+const API_BASE_URL = 'http://localhost:3000'
+```
+
+**❌ Bad Practice:** Unclear or inconsistent names
+
+```typescript
+const a = page.locator('input')
+const Button1 = page.locator('button')
+async function doStuff() {}
+async function TestSomething() {}
+const x = { e: 'user@test.com' }
+```
+
+### Test Naming Patterns
+
+**✅ Good Practice:** Behavior-driven naming
+
+```typescript
+// Pattern 1: should [action] [expected outcome]
+test('should display error when email is invalid', async ({ page }) => {})
+test('should redirect to dashboard after login', async ({ page }) => {})
+
+// Pattern 2: [feature] - [scenario]
+test('Book Search - filters results by author name', async ({ page }) => {})
+test('Pagination - navigates to next page', async ({ page }) => {})
+
+// Pattern 3: Given-When-Then style
+test('Given logged in user, When clicking logout, Then redirects to home', async ({ page }) => {})
+
+// Use describe blocks for context
+test.describe('Book Management', () => {
+  test.describe('when user is authenticated', () => {
+    test('should allow adding books to reading list', async ({ page }) => {})
+    test('should allow removing books from reading list', async ({ page }) => {})
+  })
+
+  test.describe('when user is not authenticated', () => {
+    test('should redirect to login page', async ({ page }) => {})
+  })
+})
+```
+
+**❌ Bad Practice:** Implementation-focused or vague names
+
+```typescript
+test('test login', async ({ page }) => {})
+test('checks button', async ({ page }) => {})
+test('page.goto and page.click', async ({ page }) => {})
+```
+
+## 8. Performance Considerations
+
+### Parallel Execution
+
+**✅ Good Practice:** Design tests to run in parallel
+
+```typescript
+// playwright.config.ts
+export default defineConfig({
+  workers: process.env.CI ? 2 : undefined, // Parallel by default
+  fullyParallel: true, // Run tests in parallel within file
+})
+
+// Tests are isolated and can run concurrently
+test('test A', async ({ page }) => {
+  // Each test gets its own browser context
+  await page.goto('/books')
+  // ...
+})
+
+test('test B', async ({ page }) => {
+  // Runs in parallel with test A
+  await page.goto('/kanban')
+  // ...
+})
+```
+
+**❌ Bad Practice:** Tests with shared state
+
+```typescript
+// BAD: Tests share state and must run serially
+let sharedData: any
+
+test.describe.serial('dependent tests', () => {
+  test('setup', async ({ page }) => {
+    sharedData = await setupData()
+  })
+
+  test('use data', async ({ page }) => {
+    // Depends on previous test
+    await doSomething(sharedData)
+  })
+})
+```
+
+### Efficient Selectors
+
+**✅ Good Practice:** Use efficient selector strategies
+
+```typescript
+// Reuse locators
+test('multiple actions on same element', async ({ page }) => {
+  const submitButton = page.getByRole('button', { name: 'Submit' })
+
+  await expect(submitButton).toBeVisible()
+  await expect(submitButton).toBeEnabled()
+  await submitButton.click()
+})
+
+// Filter locators instead of multiple queries
+const bookCards = page.getByTestId('book-card')
+await bookCards.filter({ hasText: 'Gatsby' }).click()
+await bookCards.filter({ hasText: 'Orwell' }).click()
+```
+
+**❌ Bad Practice:** Repeated queries
+
+```typescript
+// Inefficient: Queries DOM multiple times
+await page.getByRole('button', { name: 'Submit' }).isVisible()
+await page.getByRole('button', { name: 'Submit' }).isEnabled()
+await page.getByRole('button', { name: 'Submit' }).click()
+```
+
+### Network Optimization
+
+**✅ Good Practice:** Block unnecessary resources
+
+```typescript
+test.describe('performance tests', () => {
+  test.beforeEach(async ({ page }) => {
+    // Block images and fonts if not needed
+    await page.route('**/*.{png,jpg,jpeg,gif,svg}', (route) => route.abort())
+    await page.route('**/*.{woff,woff2,ttf}', (route) => route.abort())
+  })
+
+  test('should load page quickly', async ({ page }) => {
+    await page.goto('/books')
+    // ...
+  })
+})
+
+// Or mock API responses
+test('should display mocked data', async ({ page }) => {
+  await page.route('**/api/books', (route) => {
+    route.fulfill({
+      status: 200,
+      body: JSON.stringify(mockBooks),
+    })
+  })
+
+  await page.goto('/books')
+  // Fast: No real API call
+})
+```
+
+**❌ Bad Practice:** Loading unnecessary resources
+
+```typescript
+// Slow: Loads all images, fonts, analytics, etc.
+test('test', async ({ page }) => {
+  await page.goto('/books') // Loads everything
+})
+```
+
+### Test Data Management
+
+**✅ Good Practice:** Use fixtures for test data
+
+```typescript
+// e2e/fixtures/testData.ts
+export const mockBooks = [
+  { id: 1, title: 'The Great Gatsby', author: 'F. Scott Fitzgerald' },
+  { id: 2, title: '1984', author: 'George Orwell' },
+]
+
+// e2e/fixtures/index.ts
+import { test as base } from '@playwright/test'
+import { BooksPage } from '../pages/BooksPage'
+import { mockBooks } from './testData'
+
+type Fixtures = {
+  booksPage: BooksPage
+  testBooks: typeof mockBooks
+}
+
+export const test = base.extend<Fixtures>({
+  booksPage: async ({ page }, use) => {
+    const booksPage = new BooksPage(page)
+    await booksPage.goto()
+    await use(booksPage)
+  },
+
+  testBooks: async ({}, use) => {
+    await use(mockBooks)
+  },
+})
+
+// Usage in tests
+test('should display books', async ({ booksPage, testBooks }) => {
+  await expect(booksPage.bookCards).toHaveCount(testBooks.length)
+})
+```
+
+**❌ Bad Practice:** Duplicating test data
+
+```typescript
+// Data scattered across tests
+test('test 1', async ({ page }) => {
+  const books = [{ id: 1, title: 'Book' }] // Duplicated
+})
+
+test('test 2', async ({ page }) => {
+  const books = [{ id: 1, title: 'Book' }] // Duplicated
+})
+```
+
+## 9. Additional Best Practices
+
+### Debugging
+
+**✅ Good Practice:** Use Playwright's debugging tools
+
+```typescript
+// Run with --debug flag for step-by-step debugging
+// npx playwright test --debug
+
+// Pause execution
+await page.pause()
+
+// Take screenshots on failure (config)
+use: {
+  screenshot: 'only-on-failure',
+  video: 'retain-on-failure',
+}
+
+// Use console logs strategically
+console.log('Current URL:', page.url())
+console.log('Book count:', await page.getByTestId('book-card').count())
+
+// Generate trace for debugging
+use: {
+  trace: 'on-first-retry',
+}
+```
+
+### Accessibility Testing
+
+**✅ Good Practice:** Verify accessibility
+
+```typescript
+import AxeBuilder from '@axe-core/playwright'
+
+test('should not have accessibility violations', async ({ page }) => {
+  await page.goto('/books')
+
+  const accessibilityScanResults = await new AxeBuilder({ page }).analyze()
+
+  expect(accessibilityScanResults.violations).toEqual([])
+})
+
+// Test keyboard navigation
+test('should navigate with keyboard', async ({ page }) => {
+  await page.goto('/books')
+
+  await page.keyboard.press('Tab')
+  await expect(page.getByRole('searchbox')).toBeFocused()
+
+  await page.keyboard.press('Tab')
+  await expect(page.getByRole('button', { name: 'Search' })).toBeFocused()
+})
+```
+
+### Error Handling
+
+**✅ Good Practice:** Handle and verify errors gracefully
+
+```typescript
+test('should display error message on network failure', async ({ page }) => {
+  // Simulate network failure
+  await page.route('**/api/books', (route) => {
+    route.fulfill({
+      status: 500,
+      body: JSON.stringify({ error: 'Internal Server Error' }),
+    })
+  })
+
+  await page.goto('/books')
+
+  await expect(page.getByRole('alert')).toHaveText(/failed to load books/i)
+  await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible()
+})
+```
+
+### Mobile Testing
+
+**✅ Good Practice:** Test responsive behavior
+
+```typescript
+import { devices } from '@playwright/test'
+
+test.describe('mobile', () => {
+  test.use({ ...devices['iPhone 13'] })
+
+  test('should display mobile menu', async ({ page }) => {
+    await page.goto('/books')
+
+    await expect(page.getByRole('button', { name: 'Menu' })).toBeVisible()
+    await page.getByRole('button', { name: 'Menu' }).click()
+    await expect(page.getByRole('navigation')).toBeVisible()
+  })
+})
+```
+
+## Summary Checklist
+
+When writing Playwright tests, ensure you:
+
+- ✅ Use role-based selectors as the first choice
+- ✅ Implement Page Object Model for complex pages
+- ✅ Structure tests with clear Arrange-Act-Assert pattern
+- ✅ Keep tests independent and isolated
+- ✅ Use web-first assertions with auto-waiting
+- ✅ Rely on Playwright's auto-waiting instead of manual timeouts
+- ✅ Name tests descriptively based on behavior
+- ✅ Design tests to run in parallel
+- ✅ Add `data-testid` attributes for non-semantic elements
+- ✅ Verify accessibility in your tests
+- ✅ Handle loading states explicitly
+- ✅ Use fixtures for shared setup and test data
+- ✅ Enable screenshots and traces for debugging
+- ✅ Mock API responses when appropriate
+
+## Resources
+
+- [Playwright Best Practices](https://playwright.dev/docs/best-practices)
+- [Playwright Locators](https://playwright.dev/docs/locators)
+- [Playwright Test Assertions](https://playwright.dev/docs/test-assertions)
+- [Playwright Page Object Model](https://playwright.dev/docs/pom)
+- [Web-First Assertions](https://playwright.dev/docs/test-assertions)
+
+---
+
+By following these guidelines, you'll create robust, maintainable, and efficient Playwright tests that provide reliable feedback about your application's functionality.

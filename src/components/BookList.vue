@@ -1,10 +1,21 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onErrorCaptured, onMounted } from 'vue'
 import { useBookData } from '../composables/useBookData'
+import { useErrorHandler } from '../composables/useErrorHandler'
 import { usePagination } from '../composables/usePagination'
 import { useSearch } from '../composables/useSearch'
 import BookCard from './BookCard.vue'
 import Pagination from './Pagination.vue'
+
+// Error handling
+const { error: componentError, handleError, clearError } = useErrorHandler()
+
+// Component-level error boundary
+onErrorCaptured((err, instance, info) => {
+  handleError(err, `BookList.${info}`)
+  // Prevent error from propagating to global handler
+  return false
+})
 
 const pagination = usePagination(() => {
   fetchBooks()
@@ -30,6 +41,37 @@ onMounted(() => {
 <template>
   <div class="max-w-7xl mx-auto px-5 py-5">
     <h1 class="text-4xl font-bold mb-6">Book Collection</h1>
+
+    <!-- Error Banner -->
+    <div
+      v-if="componentError"
+      class="mb-5 p-4 rounded-lg bg-red-50 border border-red-200 flex items-center justify-between"
+      role="alert"
+    >
+      <div class="flex items-center">
+        <svg
+          class="h-5 w-5 text-red-600 mr-3"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+          />
+        </svg>
+        <span class="text-red-800">{{ componentError.message }}</span>
+      </div>
+      <button
+        @click="clearError"
+        class="text-red-600 hover:text-red-800 font-medium"
+        aria-label="Dismiss error"
+      >
+        Dismiss
+      </button>
+    </div>
 
     <div class="mb-6">
       <div class="relative">

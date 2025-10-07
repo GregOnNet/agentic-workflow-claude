@@ -973,3 +973,120 @@ function process_data() {
 ## Conclusion
 
 Following these guidelines and SOLID principles will lead to more maintainable, testable, and scalable Vue applications. Remember that the ultimate goal is code that is easy to understand, modify, and extend as requirements evolve.
+
+## Error Handling
+
+### Centralized Error Handling
+
+**✅ Good Practice:** Use a dedicated error handling composable
+
+```ts
+// composables/useErrorHandler.ts
+export function useErrorHandler() {
+  const error = ref<Error | null>(null)
+  
+  function handleError(err: Error, context?: string) {
+    error.value = err
+    console.error(`Error in ${context}:`, err)
+    
+    if (import.meta.env.PROD) {
+      // logToSentry(err, context)
+    }
+  }
+  
+  async function withErrorHandling<T>(
+    fn: () => Promise<T>,
+    context: string
+  ): Promise<T | null> {
+    try {
+      return await fn()
+    } catch (err) {
+      handleError(err as Error, context)
+      return null
+    }
+  }
+  
+  function safeExecute<T>(
+    fn: () => T,
+    context: string,
+    fallback?: T
+  ): T | undefined {
+    try {
+      return fn()
+    } catch (err) {
+      handleError(err as Error, context)
+      return fallback
+    }
+  }
+  
+  return { error, handleError, withErrorHandling, safeExecute }
+}
+```
+
+**❌ Bad Practice:** Repetitive try-catch blocks everywhere
+
+```ts
+// Duplicated error handling in every function
+async function fetchBooks() {
+  try {
+    const result = await getBooks(params)
+    booksList.value = result.books
+  } catch (err) {
+    error.value = 'Failed'
+    console.error(err)
+  }
+}
+```
+
+### Component Error Boundaries
+
+**✅ Good Practice:** Use onErrorCaptured
+
+```vue
+<script setup lang="ts">
+import { onErrorCaptured } from 'vue'
+import { useErrorHandler } from '@/composables/useErrorHandler'
+
+const { error, handleError, clearError } = useErrorHandler()
+
+onErrorCaptured((err, instance, info) => {
+  handleError(err, `Component.${info}`)
+  return false
+})
+</script>
+
+<template>
+  <div v-if="error">
+    {{ error.message }}
+    <button @click="clearError">Dismiss</button>
+  </div>
+</template>
+```
+
+**❌ Bad Practice:** No error boundaries - errors crash app
+
+### Global Error Handler
+
+**✅ Good Practice:** Set up in main.ts
+
+```ts
+const app = createApp(App)
+
+app.config.errorHandler = (err, instance, info) => {
+  console.error('Global error:', err)
+  if (import.meta.env.PROD) {
+    // trackError(err)
+  }
+}
+
+window.addEventListener('unhandledrejection', (event) => {
+  console.error('Unhandled rejection:', event.reason)
+  event.preventDefault()
+})
+```
+
+**Key Principles:**
+- Centralize error handling logic
+- Fail gracefully with fallbacks
+- Log in dev, track in production
+- Show user-friendly error messages

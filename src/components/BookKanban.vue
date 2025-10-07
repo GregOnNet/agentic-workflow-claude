@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, watch } from 'vue'
+import { computed, onErrorCaptured, onMounted, watch } from 'vue'
 import draggable from 'vuedraggable'
 import { useDragDrop } from '../composables/useDragDrop'
+import { useErrorHandler } from '../composables/useErrorHandler'
 import { useKanbanColumns } from '../composables/useKanbanColumns'
 import { useReadingState } from '../composables/useReadingState'
 import type { Book } from '../types'
@@ -15,6 +16,16 @@ const props = defineProps<{
 const emit = defineEmits<{
   'status-change': [bookId: number, status: 'to-read' | 'currently-reading' | 'read']
 }>()
+
+// Error handling
+const { error: componentError, handleError, clearError } = useErrorHandler()
+
+// Component-level error boundary
+onErrorCaptured((err, instance, info) => {
+  handleError(err, `BookKanban.${info}`)
+  // Prevent error from propagating to global handler
+  return false
+})
 
 // Initialize composables
 const { readingState, loadState, saveState, clearState } = useReadingState()
@@ -74,6 +85,37 @@ defineExpose({
 
 <template>
   <div class="kanban-board">
+    <!-- Error Banner -->
+    <div
+      v-if="componentError"
+      class="mb-5 p-4 rounded-lg bg-red-50 border border-red-200 flex items-center justify-between"
+      role="alert"
+    >
+      <div class="flex items-center">
+        <svg
+          class="h-5 w-5 text-red-600 mr-3"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+          />
+        </svg>
+        <span class="text-red-800">{{ componentError.message }}</span>
+      </div>
+      <button
+        @click="clearError"
+        class="text-red-600 hover:text-red-800 font-medium"
+        aria-label="Dismiss error"
+      >
+        Dismiss
+      </button>
+    </div>
+
     <div
       v-if="isLoading"
       class="p-5 text-center mt-5 rounded-lg bg-blue-50 text-blue-600"

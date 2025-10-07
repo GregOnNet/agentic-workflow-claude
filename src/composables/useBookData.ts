@@ -1,6 +1,8 @@
-import { ref, Ref } from 'vue'
+import type { Ref } from 'vue'
+import { computed, ref } from 'vue'
 import { getBooks, type PaginationParams } from '../data/books'
 import type { Book } from '../types'
+import { useErrorHandler } from './useErrorHandler'
 
 interface PaginationState {
   currentPage: Ref<number>
@@ -12,13 +14,17 @@ interface PaginationState {
 export function useBookData(searchTerm: Ref<string>, pagination: PaginationState) {
   const booksList = ref<Book[]>([])
   const isLoading = ref(true)
-  const error = ref<string | null>(null)
+  const { error, withErrorHandling } = useErrorHandler()
+
+  // Computed error message for better UX
+  const errorMessage = computed(() =>
+    error.value ? 'Failed to load books. Please try again later.' : null,
+  )
 
   async function fetchBooks() {
-    try {
-      isLoading.value = true
-      error.value = null
+    isLoading.value = true
 
+    const result = await withErrorHandling(async () => {
       const params: PaginationParams = {
         page: pagination.currentPage.value,
         limit: pagination.pageSize.value,
@@ -35,18 +41,18 @@ export function useBookData(searchTerm: Ref<string>, pagination: PaginationState
         pagination.currentPage.value = result.totalPages
         await fetchBooks()
       }
-    } catch (err) {
-      error.value = 'Failed to load books. Please try again later.'
-      console.error(err)
-    } finally {
-      isLoading.value = false
-    }
+
+      return result
+    }, 'useBookData.fetchBooks')
+
+    isLoading.value = false
+    return result
   }
 
   return {
     booksList,
     isLoading,
-    error,
+    error: errorMessage,
     fetchBooks,
   }
 }

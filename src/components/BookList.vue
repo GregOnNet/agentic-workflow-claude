@@ -1,81 +1,26 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { getBooks, type PaginationParams } from '../data/books'
-import type { Book } from '../types'
+import { computed, onMounted } from 'vue'
+import { useBookData } from '../composables/useBookData'
+import { usePagination } from '../composables/usePagination'
+import { useSearch } from '../composables/useSearch'
 import BookCard from './BookCard.vue'
 import Pagination from './Pagination.vue'
 
-const booksList = ref<Book[]>([])
-const isLoading = ref(true)
-const error = ref<string | null>(null)
-const searchTerm = ref('')
-const debounceTimeout = ref<number | null>(null)
-
-// Pagination state
-const currentPage = ref(1)
-const pageSize = ref(10)
-const totalItems = ref(0)
-const totalPages = ref(0)
-
-// Available page size options
-const pageSizeOptions = [5, 10, 50, 100]
-
-async function fetchBooks() {
-  try {
-    isLoading.value = true
-    error.value = null
-
-    const params: PaginationParams = {
-      page: currentPage.value,
-      limit: pageSize.value,
-      searchTerm: searchTerm.value,
-    }
-
-    const result = await getBooks(params)
-    booksList.value = result.books
-    totalItems.value = result.totalItems
-    totalPages.value = result.totalPages
-
-    // Adjust current page if it exceeds total pages
-    if (currentPage.value > result.totalPages && result.totalPages > 0) {
-      currentPage.value = result.totalPages
-      await fetchBooks()
-    }
-  } catch (err) {
-    error.value = 'Failed to load books. Please try again later.'
-    console.error(err)
-  } finally {
-    isLoading.value = false
-  }
-}
-
-function handleSearch(event: Event) {
-  const value = (event.target as HTMLInputElement).value
-  searchTerm.value = value
-
-  // Clear any existing timeout
-  if (debounceTimeout.value) {
-    window.clearTimeout(debounceTimeout.value)
-  }
-
-  // Set new timeout
-  debounceTimeout.value = window.setTimeout(() => {
-    currentPage.value = 1 // Reset to first page on new search
-    fetchBooks()
-  }, 200)
-}
-
-function handlePageChange(page: number) {
-  currentPage.value = page
+const pagination = usePagination(() => {
   fetchBooks()
-}
+})
 
-function changePageSize(event: Event) {
-  const newSize = Number((event.target as HTMLSelectElement).value)
-  pageSize.value = newSize
-  currentPage.value = 1 // Reset to first page when changing page size
+const { searchTerm, handleSearch } = useSearch(() => {
+  pagination.currentPage.value = 1 // Reset to first page on new search
   fetchBooks()
-}
+})
+
+const { booksList, isLoading, error, fetchBooks } = useBookData(searchTerm, pagination)
+
+// Computed properties
+const showingCount = computed(
+  () => `Showing ${booksList.value.length} of ${pagination.totalItems.value} books`,
+)
 
 onMounted(() => {
   fetchBooks()
@@ -94,6 +39,7 @@ onMounted(() => {
           @input="handleSearch"
           placeholder="Search books..."
           class="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          aria-label="Search books"
         />
         <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
           <svg
@@ -135,26 +81,31 @@ onMounted(() => {
         <div class="flex items-center">
           <span class="mr-2 text-gray-600">Items per page:</span>
           <select
-            :value="pageSize"
-            @change="changePageSize"
+            :value="pagination.pageSize"
+            @change="pagination.changePageSize"
             class="border border-gray-300 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <option v-for="size in pageSizeOptions" :key="size" :value="size">{{ size }}</option>
+            <option v-for="size in pagination.pageSizeOptions" :key="size" :value="size">
+              {{ size }}
+            </option>
           </select>
         </div>
-        <div class="text-gray-600">Showing {{ booksList.length }} of {{ totalItems }} books</div>
+        <div class="text-gray-600">{{ showingCount }}</div>
       </div>
 
       <!-- Book grid -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
+      <div
+        v-memo="[pagination.currentPage, pagination.pageSize, searchTerm]"
+        class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5"
+      >
         <BookCard v-for="book in booksList" :key="book.id" :book="book" />
       </div>
 
       <!-- Pagination -->
       <Pagination
-        :current-page="currentPage"
-        :total-pages="totalPages"
-        @page-change="handlePageChange"
+        :current-page="pagination.currentPage.value"
+        :total-pages="pagination.totalPages.value"
+        @page-change="pagination.handlePageChange"
       />
     </div>
   </div>

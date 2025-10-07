@@ -1,14 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import draggable from 'vuedraggable'
-import type { Book, BookColumn, BookReadingState } from '../types'
-import { booksToColumns } from '../utils/bookTransform'
-import {
-  clearReadingState,
-  columnsToReadingState,
-  loadReadingState,
-  saveReadingState,
-} from '../utils/localStorage'
+import { useDragDrop } from '../composables/useDragDrop'
+import { useKanbanColumns } from '../composables/useKanbanColumns'
+import { useReadingState } from '../composables/useReadingState'
+import type { Book } from '../types'
 
 // Props
 const props = defineProps<{
@@ -20,152 +16,85 @@ const emit = defineEmits<{
   'status-change': [bookId: number, status: 'to-read' | 'currently-reading' | 'read']
 }>()
 
-// State
-const readingState = ref<BookReadingState>({})
-const columns = ref<BookColumn[]>([])
+// Initialize composables
+const { readingState, loadState, saveState, clearState } = useReadingState()
 
-// Initialize reading state and columns
+// Load reading state
 onMounted(() => {
   console.log('Component mounted, loading reading state...')
-  readingState.value = loadReadingState()
-  console.log('Loaded reading state:', readingState.value)
-  updateColumns()
+  loadState()
 })
+
+// Initialize columns with loaded reading state
+const { columns, isLoading, updateColumns } = useKanbanColumns(props.books, readingState.value)
+
+// Handle drag and drop
+const { handleDragEnd } = useDragDrop(
+  columns.value,
+  (bookId, status) => emit('status-change', bookId, status),
+  () => saveState(columns.value),
+)
 
 // Watch for books changes
 watch(
   () => props.books,
   (newBooks) => {
     console.log('Books changed, updating columns with', newBooks.length, 'books')
-    updateColumns()
+    updateColumns(readingState.value)
   },
   { deep: true, immediate: true },
 )
 
-// Computed
-const isLoading = computed(() => columns.value.length === 0)
-
-// Methods
-function updateColumns() {
-  console.log(
-    'Updating columns with books:',
-    props.books.length,
-    'and reading state:',
-    readingState.value,
-  )
-
-  if (props.books.length === 0) {
-    // If no books, create empty columns
-    columns.value = [
-      { id: 'to-read', title: 'To Read', books: [] },
-      { id: 'currently-reading', title: 'Currently Reading', books: [] },
-      { id: 'read', title: 'Read', books: [] },
-    ]
-  } else {
-    columns.value = booksToColumns(props.books, readingState.value)
-  }
-
-  console.log('Updated columns:', columns.value)
-}
-
-function saveState() {
-  console.log('Saving state for columns:', columns.value)
-  const state = columnsToReadingState(columns.value)
-  saveReadingState(state)
-  readingState.value = state
-  console.log('Updated reading state:', readingState.value)
-}
-
-// Drag and drop handlers
-function handleDragEnd(event: {
-  from: HTMLElement
-  to: HTMLElement
-  item: HTMLElement
-  newIndex: number
-  oldIndex: number
-}) {
-  console.log('Drag end event:', event)
-  const { from, to, item, newIndex, oldIndex } = event
-
-  if (!from || !to || !item) {
-    console.log('Missing required elements:', { from: !!from, to: !!to, item: !!item })
-    return
-  }
-
-  const sourceColumnId = from.getAttribute('data-column-id')
-  const targetColumnId = to.getAttribute('data-column-id')
-  const bookIdStr = item.getAttribute('data-book-id')
-  const bookId = bookIdStr ? parseInt(bookIdStr) : 0
-
-  console.log('Drag details:', { sourceColumnId, targetColumnId, bookId, newIndex, oldIndex })
-
-  if (!sourceColumnId || !targetColumnId || !bookId) {
-    console.log('Missing required attributes:', { sourceColumnId, targetColumnId, bookId })
-    return
-  }
-
-  // Find the book and update its status if moved to different column
-  if (sourceColumnId !== targetColumnId) {
-    const targetColumn = columns.value.find((col) => col.id === targetColumnId)
-    if (targetColumn) {
-      const book = targetColumn.books.find((b) => b.id === bookId)
-      if (book) {
-        book.readingStatus = targetColumnId as 'to-read' | 'currently-reading' | 'read'
-        console.log(`Updated book ${bookId} status to ${targetColumnId}`)
-      }
-    }
-  }
-
-  // Update order for all books in both columns
-  columns.value.forEach((column) => {
-    column.books.forEach((book, index) => {
-      book.order = index
-    })
-  })
-
-  // Save to localStorage
-  saveState()
-
-  // Emit status change if column changed
-  if (sourceColumnId !== targetColumnId) {
-    emit('status-change', bookId, targetColumnId as 'to-read' | 'currently-reading' | 'read')
-  }
-}
+// Computed properties
+const totalBooks = computed(() =>
+  columns.value.reduce((acc, column) => acc + column.books.length, 0),
+)
 
 // Method to reload reading state from localStorage
 function reloadReadingState() {
   console.log('Reloading reading state from localStorage...')
-  readingState.value = loadReadingState()
-  console.log('Reloaded reading state:', readingState.value)
-  updateColumns()
+  const newState = loadState()
+  updateColumns(newState)
 }
 
 // Debug method to clear localStorage
-function clearState() {
+function clearReadingStateAndUpdate() {
   console.log('Clearing reading state...')
-  clearReadingState()
-  readingState.value = {}
-  updateColumns()
+  const newState = clearState()
+  updateColumns(newState)
 }
 
 // Expose methods for parent component
 defineExpose({
-  updateColumns,
+  updateColumns: () => updateColumns(readingState.value),
   reloadReadingState,
-  clearState,
+  clearState: clearReadingStateAndUpdate,
 })
 </script>
 
 <template>
   <div class="kanban-board">
-    <div v-if="isLoading" class="p-5 text-center mt-5 rounded-lg bg-blue-50 text-blue-600">
+    <div
+      v-if="isLoading"
+      class="p-5 text-center mt-5 rounded-lg bg-blue-50 text-blue-600"
+      role="status"
+      aria-live="polite"
+    >
       Loading kanban board...
+    </div>
+
+    <div
+      v-else-if="totalBooks === 0"
+      class="p-5 text-center mt-5 rounded-lg bg-gray-100 text-gray-600"
+    >
+      No books available. Add some books to get started.
     </div>
 
     <div v-else class="grid grid-cols-1 md:grid-cols-3 gap-6">
       <div
         v-for="column in columns"
         :key="column.id"
+        v-memo="[column.books.length, totalBooks]"
         class="kanban-column bg-gray-50 rounded-lg p-4 min-h-[500px]"
       >
         <!-- Column Header -->
@@ -189,11 +118,16 @@ defineExpose({
           :chosen-class="'chosen-book'"
           :drag-class="'drag-book'"
           :empty-insert-threshold="50"
+          aria-label="Books in category"
+          role="list"
         >
           <template #item="{ element: book }">
             <div
               :data-book-id="book.id"
               class="book-card bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200 cursor-grab active:cursor-grabbing"
+              role="listitem"
+              :aria-label="book.title + ' by ' + book.author"
+              tabindex="0"
             >
               <!-- Book Cover -->
               <div class="w-full h-48">

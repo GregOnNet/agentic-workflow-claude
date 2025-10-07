@@ -1,0 +1,975 @@
+---
+alwaysApply: true
+---
+
+# Vue Coding Guidelines: SOLID Principles for High-Quality Code
+
+## Introduction
+
+This document provides guidelines for writing high-quality Vue code that follows SOLID principles. These guidelines are derived from practical refactoring experiences and represent industry best practices for Vue application development.
+
+## SOLID Principles in Vue
+
+### Single Responsibility Principle (SRP)
+
+Components, composables, and functions should have only one reason to change.
+
+**✅ Good Practice:** Extract specific functionality into dedicated composables
+
+```vue
+// Using composables with single responsibilities const { searchTerm, handleSearch } = useSearch(()
+=> fetchData()) const { pagination, handlePageChange } = usePagination(() => fetchData()) const {
+data, isLoading, error, fetchData } = useDataFetching(searchTerm, pagination)
+```
+
+**❌ Bad Practice:** Putting everything in one component
+
+```vue
+// Component handles everything: search, pagination, and data fetching const searchTerm = ref('')
+const currentPage = ref(1) const isLoading = ref(true) const data = ref([]) function handleSearch()
+{ /* search logic mixed with other concerns */ } function changePage() { /* pagination logic mixed
+with other concerns */ } function fetchData() { /* data fetching mixed with other concerns */ }
+```
+
+### Open-Closed Principle (OCP)
+
+Code should be open for extension but closed for modification.
+
+**✅ Good Practice:** Creating extensible composables
+
+```ts
+// A composable that can be extended with different implementations
+export function useDataSource<T>(fetcher: () => Promise<T[]>) {
+  const data = ref<T[]>([])
+  const isLoading = ref(false)
+
+  async function loadData() {
+    isLoading.value = true
+    try {
+      data.value = await fetcher()
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  return { data, isLoading, loadData }
+}
+
+// Usage with different data sources
+const bookStore = useDataSource(() => fetchBooks())
+const userStore = useDataSource(() => fetchUsers())
+```
+
+**❌ Bad Practice:** Hardcoding implementation details
+
+```ts
+// Tightly coupled to a specific data source
+export function useBookData() {
+  const books = ref([])
+
+  async function loadBooks() {
+    books.value = await fetch('/api/books').then((r) => r.json())
+  }
+
+  return { books, loadBooks }
+}
+```
+
+### Liskov Substitution Principle (LSP)
+
+Components should be replaceable with their subtypes without affecting correctness.
+
+**✅ Good Practice:** Consistent props and emits interfaces
+
+```vue
+<!-- BaseList.vue -->
+<script setup>
+defineProps({
+  items: { type: Array, required: true },
+  loading: { type: Boolean, default: false },
+})
+defineEmits(['item-selected'])
+</script>
+
+<!-- BookList.vue - follows same interface -->
+<script setup>
+defineProps({
+  items: { type: Array, required: true },
+  loading: { type: Boolean, default: false },
+})
+defineEmits(['item-selected'])
+</script>
+```
+
+**❌ Bad Practice:** Inconsistent interfaces
+
+```vue
+<!-- BookList requires different props than ProductList -->
+<BookList :books="books" :isLoading="loading" @select="handleSelect" />
+<ProductList :productItems="products" :loadingState="loading" @item-click="handleSelect" />
+```
+
+### Interface Segregation Principle (ISP)
+
+Components shouldn't be forced to depend on interfaces they don't use.
+
+**✅ Good Practice:** Tailored composables
+
+```ts
+// Specific search composable
+export function useSearch() {
+  const term = ref('')
+  const handleInput = (e) => {
+    term.value = e.target.value
+  }
+  return { term, handleInput }
+}
+
+// Specific pagination composable
+export function usePagination() {
+  const page = ref(1)
+  const changePage = (newPage) => {
+    page.value = newPage
+  }
+  return { page, changePage }
+}
+```
+
+**❌ Bad Practice:** Monolithic store with unused features
+
+```ts
+// Component must import the whole store even if it only needs search
+import { useStore } from './store'
+
+// Component setup
+const store = useStore()
+// Only uses search but gets pagination, filtering, etc.
+const search = () => store.setSearchTerm(term.value)
+```
+
+### Dependency Inversion Principle (DIP)
+
+High-level modules shouldn't depend on low-level modules.
+
+**✅ Good Practice:** Injecting dependencies
+
+```ts
+// Component depends on abstraction, not implementation
+export function useBookData(searchProvider, paginationProvider, apiClient) {
+  const fetchBooks = async () => {
+    const params = {
+      term: searchProvider.term.value,
+      page: paginationProvider.page.value,
+    }
+    return await apiClient.getBooks(params)
+  }
+
+  return { fetchBooks }
+}
+```
+
+**❌ Bad Practice:** Direct dependency on implementations
+
+```ts
+// Directly depends on specific implementations
+import { searchStore } from './searchStore'
+import { paginationStore } from './paginationStore'
+import { apiClient } from './apiClient'
+
+export function useBookData() {
+  const fetchBooks = async () => {
+    const params = {
+      term: searchStore.term,
+      page: paginationStore.page,
+    }
+    return await apiClient.getBooks(params)
+  }
+
+  return { fetchBooks }
+}
+```
+
+## Component Structure
+
+### Component Organization
+
+**✅ Good Practice:** Well-structured components
+
+```vue
+<script setup>
+// 1. Imports
+import { ref, computed, onMounted } from 'vue'
+import { useFeatureA } from '@/composables/useFeatureA'
+
+// 2. Props and emits
+const props = defineProps({
+  /* ... */
+})
+const emit = defineEmits(['update'])
+
+// 3. Composable usage
+const { featureData, featureMethod } = useFeatureA()
+
+// 4. Refs and reactive state
+const localState = ref(null)
+
+// 5. Computed properties
+const derivedValue = computed(() => {
+  /* ... */
+})
+
+// 6. Methods
+function handleAction() {
+  /* ... */
+}
+
+// 7. Lifecycle hooks
+onMounted(() => {
+  /* ... */
+})
+</script>
+
+<template>
+  <div>
+    <!-- Structured template -->
+  </div>
+</template>
+```
+
+**❌ Bad Practice:** Unorganized component
+
+```vue
+<script setup>
+// Imports scattered throughout code
+import { onMounted } from 'vue'
+const localState = ref(null)
+// Random import in the middle
+import SomeComponent from './SomeComponent.vue'
+// No clear organization
+function someHandler() {
+  /* ... */
+}
+// Another random import
+import { useStore } from 'vuex'
+</script>
+```
+
+## Composables Design
+
+### Purpose-Driven Composables
+
+**✅ Good Practice:** Focused composables
+
+```ts
+// useSearch.ts - Focused on search functionality
+export function useSearch(callback) {
+  const searchTerm = ref('')
+  const debounceTimeout = ref(null)
+
+  function handleSearch(event) {
+    const value = event.target.value
+    searchTerm.value = value
+
+    if (debounceTimeout.value) {
+      clearTimeout(debounceTimeout.value)
+    }
+
+    debounceTimeout.value = setTimeout(() => {
+      callback()
+    }, 300)
+  }
+
+  return { searchTerm, handleSearch }
+}
+```
+
+**❌ Bad Practice:** Overly broad composables
+
+```ts
+// useBookFeatures.ts - Doing too many things
+export function useBookFeatures() {
+  // Search functionality
+  const searchTerm = ref('')
+  function handleSearch() {
+    /* ... */
+  }
+
+  // Pagination functionality
+  const currentPage = ref(1)
+  function changePage() {
+    /* ... */
+  }
+
+  // Filtering functionality
+  const filters = ref({})
+  function applyFilter() {
+    /* ... */
+  }
+
+  // Data fetching
+  const books = ref([])
+  function fetchBooks() {
+    /* ... */
+  }
+
+  return {
+    searchTerm,
+    handleSearch,
+    currentPage,
+    changePage,
+    filters,
+    applyFilter,
+    books,
+    fetchBooks,
+  }
+}
+```
+
+## State Management
+
+### Local vs. Shared State
+
+**✅ Good Practice:** Appropriate state location
+
+```ts
+// Local component state for UI-specific concerns
+const isDropdownOpen = ref(false)
+
+// Shared state through composables for cross-component concerns
+const { user, login, logout } = useAuth()
+```
+
+**❌ Bad Practice:** Misplaced state
+
+```ts
+// Global store for UI-specific concerns
+const store = useStore()
+store.commit('TOGGLE_DROPDOWN')
+
+// Or local state for shared concerns
+const userData = ref(null)
+fetch('/api/user')
+  .then((r) => r.json())
+  .then((data) => (userData.value = data))
+```
+
+## Performance Optimization
+
+### Efficient Rendering
+
+**✅ Good Practice:** Use v-memo and computed properties
+
+```vue
+<template>
+  <!-- Use v-memo to prevent unnecessary re-renders -->
+  <div v-memo="[items.length, currentPage]">
+    <Item v-for="item in paginatedItems" :key="item.id" :item="item" />
+  </div>
+</template>
+
+<script setup>
+// Compute derived data instead of recalculating in template
+const paginatedItems = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  return items.value.slice(start, start + pageSize.value)
+})
+</script>
+```
+
+**❌ Bad Practice:** Inefficient rendering
+
+```vue
+<template>
+  <!-- No optimization, rerenders on any reactive change -->
+  <div>
+    <Item
+      v-for="item in items.slice((currentPage - 1) * pageSize, currentPage * pageSize)"
+      :key="item.id"
+      :item="item"
+    />
+  </div>
+</template>
+```
+
+## Code Consistency
+
+### Naming Conventions
+
+**✅ Good Practice:** Consistent naming
+
+```vue
+<!-- Components: PascalCase -->
+<UserProfile />
+
+<script setup>
+// Props: camelCase
+const props = defineProps({
+  userData: Object,
+  isLoading: Boolean,
+})
+
+// Methods: camelCase verb phrases
+function handleSubmit() {
+  /* ... */
+}
+
+// Composables: use* prefix
+const { user, isAdmin } = useUserData()
+</script>
+```
+
+**❌ Bad Practice:** Inconsistent naming
+
+```vue
+<!-- Mixed casing for components -->
+<user-profile />
+<UserDetails />
+
+<script setup>
+// Inconsistent prop naming
+const props = defineProps({
+  UserData: Object,
+  is_loading: Boolean,
+})
+
+// Inconsistent method naming
+function SubmitForm() {
+  /* ... */
+}
+function process_data() {
+  /* ... */
+}
+</script>
+```
+
+## Accessibility and Best Practices
+
+### Accessible Components
+
+**✅ Good Practice:** Accessible and semantic HTML
+
+```vue
+<template>
+  <section aria-labelledby="section-title">
+    <h2 id="section-title">Book Collection</h2>
+
+    <div role="status" v-if="isLoading">Loading...</div>
+
+    <ul v-else>
+      <li v-for="book in books" :key="book.id">
+        <button @click="selectBook(book)" aria-pressed="book.isSelected">
+          {{ book.title }}
+        </button>
+      </li>
+    </ul>
+  </section>
+</template>
+```
+
+**❌ Bad Practice:** Non-semantic HTML
+
+```vue
+<template>
+  <div>
+    <div>Book Collection</div>
+
+    <div v-if="isLoading">Loading...</div>
+
+    <div v-else>
+      <div v-for="book in books" :key="book.id">
+        <div @click="selectBook(book)">{{ book.title }}</div>
+      </div>
+    </div>
+  </div>
+</template>
+```
+
+## Conclusion
+
+Following these guidelines and SOLID principles will lead to more maintainable, testable, and scalable Vue applications. Remember that the ultimate goal is code that is easy to understand, modify, and extend as requirements evolve.
+
+# Vue Coding Guidelines: SOLID Principles for High-Quality Code
+
+## Introduction
+
+This document provides guidelines for writing high-quality Vue code that follows SOLID principles. These guidelines are derived from practical refactoring experiences and represent industry best practices for Vue application development.
+
+## SOLID Principles in Vue
+
+### Single Responsibility Principle (SRP)
+
+Components, composables, and functions should have only one reason to change.
+
+**✅ Good Practice:** Extract specific functionality into dedicated composables
+
+```vue
+// Using composables with single responsibilities const { searchTerm, handleSearch } = useSearch(()
+=> fetchData()) const { pagination, handlePageChange } = usePagination(() => fetchData()) const {
+data, isLoading, error, fetchData } = useDataFetching(searchTerm, pagination)
+```
+
+**❌ Bad Practice:** Putting everything in one component
+
+```vue
+// Component handles everything: search, pagination, and data fetching const searchTerm = ref('')
+const currentPage = ref(1) const isLoading = ref(true) const data = ref([]) function handleSearch()
+{ /* search logic mixed with other concerns */ } function changePage() { /* pagination logic mixed
+with other concerns */ } function fetchData() { /* data fetching mixed with other concerns */ }
+```
+
+### Open-Closed Principle (OCP)
+
+Code should be open for extension but closed for modification.
+
+**✅ Good Practice:** Creating extensible composables
+
+```ts
+// A composable that can be extended with different implementations
+export function useDataSource<T>(fetcher: () => Promise<T[]>) {
+  const data = ref<T[]>([])
+  const isLoading = ref(false)
+
+  async function loadData() {
+    isLoading.value = true
+    try {
+      data.value = await fetcher()
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  return { data, isLoading, loadData }
+}
+
+// Usage with different data sources
+const bookStore = useDataSource(() => fetchBooks())
+const userStore = useDataSource(() => fetchUsers())
+```
+
+**❌ Bad Practice:** Hardcoding implementation details
+
+```ts
+// Tightly coupled to a specific data source
+export function useBookData() {
+  const books = ref([])
+
+  async function loadBooks() {
+    books.value = await fetch('/api/books').then((r) => r.json())
+  }
+
+  return { books, loadBooks }
+}
+```
+
+### Liskov Substitution Principle (LSP)
+
+Components should be replaceable with their subtypes without affecting correctness.
+
+**✅ Good Practice:** Consistent props and emits interfaces
+
+```vue
+<!-- BaseList.vue -->
+<script setup>
+defineProps({
+  items: { type: Array, required: true },
+  loading: { type: Boolean, default: false },
+})
+defineEmits(['item-selected'])
+</script>
+
+<!-- BookList.vue - follows same interface -->
+<script setup>
+defineProps({
+  items: { type: Array, required: true },
+  loading: { type: Boolean, default: false },
+})
+defineEmits(['item-selected'])
+</script>
+```
+
+**❌ Bad Practice:** Inconsistent interfaces
+
+```vue
+<!-- BookList requires different props than ProductList -->
+<BookList :books="books" :isLoading="loading" @select="handleSelect" />
+<ProductList :productItems="products" :loadingState="loading" @item-click="handleSelect" />
+```
+
+### Interface Segregation Principle (ISP)
+
+Components shouldn't be forced to depend on interfaces they don't use.
+
+**✅ Good Practice:** Tailored composables
+
+```ts
+// Specific search composable
+export function useSearch() {
+  const term = ref('')
+  const handleInput = (e) => {
+    term.value = e.target.value
+  }
+  return { term, handleInput }
+}
+
+// Specific pagination composable
+export function usePagination() {
+  const page = ref(1)
+  const changePage = (newPage) => {
+    page.value = newPage
+  }
+  return { page, changePage }
+}
+```
+
+**❌ Bad Practice:** Monolithic store with unused features
+
+```ts
+// Component must import the whole store even if it only needs search
+import { useStore } from './store'
+
+// Component setup
+const store = useStore()
+// Only uses search but gets pagination, filtering, etc.
+const search = () => store.setSearchTerm(term.value)
+```
+
+### Dependency Inversion Principle (DIP)
+
+High-level modules shouldn't depend on low-level modules.
+
+**✅ Good Practice:** Injecting dependencies
+
+```ts
+// Component depends on abstraction, not implementation
+export function useBookData(searchProvider, paginationProvider, apiClient) {
+  const fetchBooks = async () => {
+    const params = {
+      term: searchProvider.term.value,
+      page: paginationProvider.page.value,
+    }
+    return await apiClient.getBooks(params)
+  }
+
+  return { fetchBooks }
+}
+```
+
+**❌ Bad Practice:** Direct dependency on implementations
+
+```ts
+// Directly depends on specific implementations
+import { searchStore } from './searchStore'
+import { paginationStore } from './paginationStore'
+import { apiClient } from './apiClient'
+
+export function useBookData() {
+  const fetchBooks = async () => {
+    const params = {
+      term: searchStore.term,
+      page: paginationStore.page,
+    }
+    return await apiClient.getBooks(params)
+  }
+
+  return { fetchBooks }
+}
+```
+
+## Component Structure
+
+### Component Organization
+
+**✅ Good Practice:** Well-structured components
+
+```vue
+<script setup>
+// 1. Imports
+import { ref, computed, onMounted } from 'vue'
+import { useFeatureA } from '@/composables/useFeatureA'
+
+// 2. Props and emits
+const props = defineProps({
+  /* ... */
+})
+const emit = defineEmits(['update'])
+
+// 3. Composable usage
+const { featureData, featureMethod } = useFeatureA()
+
+// 4. Refs and reactive state
+const localState = ref(null)
+
+// 5. Computed properties
+const derivedValue = computed(() => {
+  /* ... */
+})
+
+// 6. Methods
+function handleAction() {
+  /* ... */
+}
+
+// 7. Lifecycle hooks
+onMounted(() => {
+  /* ... */
+})
+</script>
+
+<template>
+  <div>
+    <!-- Structured template -->
+  </div>
+</template>
+```
+
+**❌ Bad Practice:** Unorganized component
+
+```vue
+<script setup>
+// Imports scattered throughout code
+import { onMounted } from 'vue'
+const localState = ref(null)
+// Random import in the middle
+import SomeComponent from './SomeComponent.vue'
+// No clear organization
+function someHandler() {
+  /* ... */
+}
+// Another random import
+import { useStore } from 'vuex'
+</script>
+```
+
+## Composables Design
+
+### Purpose-Driven Composables
+
+**✅ Good Practice:** Focused composables
+
+```ts
+// useSearch.ts - Focused on search functionality
+export function useSearch(callback) {
+  const searchTerm = ref('')
+  const debounceTimeout = ref(null)
+
+  function handleSearch(event) {
+    const value = event.target.value
+    searchTerm.value = value
+
+    if (debounceTimeout.value) {
+      clearTimeout(debounceTimeout.value)
+    }
+
+    debounceTimeout.value = setTimeout(() => {
+      callback()
+    }, 300)
+  }
+
+  return { searchTerm, handleSearch }
+}
+```
+
+**❌ Bad Practice:** Overly broad composables
+
+```ts
+// useBookFeatures.ts - Doing too many things
+export function useBookFeatures() {
+  // Search functionality
+  const searchTerm = ref('')
+  function handleSearch() {
+    /* ... */
+  }
+
+  // Pagination functionality
+  const currentPage = ref(1)
+  function changePage() {
+    /* ... */
+  }
+
+  // Filtering functionality
+  const filters = ref({})
+  function applyFilter() {
+    /* ... */
+  }
+
+  // Data fetching
+  const books = ref([])
+  function fetchBooks() {
+    /* ... */
+  }
+
+  return {
+    searchTerm,
+    handleSearch,
+    currentPage,
+    changePage,
+    filters,
+    applyFilter,
+    books,
+    fetchBooks,
+  }
+}
+```
+
+## State Management
+
+### Local vs. Shared State
+
+**✅ Good Practice:** Appropriate state location
+
+```ts
+// Local component state for UI-specific concerns
+const isDropdownOpen = ref(false)
+
+// Shared state through composables for cross-component concerns
+const { user, login, logout } = useAuth()
+```
+
+**❌ Bad Practice:** Misplaced state
+
+```ts
+// Global store for UI-specific concerns
+const store = useStore()
+store.commit('TOGGLE_DROPDOWN')
+
+// Or local state for shared concerns
+const userData = ref(null)
+fetch('/api/user')
+  .then((r) => r.json())
+  .then((data) => (userData.value = data))
+```
+
+## Performance Optimization
+
+### Efficient Rendering
+
+**✅ Good Practice:** Use v-memo and computed properties
+
+```vue
+<template>
+  <!-- Use v-memo to prevent unnecessary re-renders -->
+  <div v-memo="[items.length, currentPage]">
+    <Item v-for="item in paginatedItems" :key="item.id" :item="item" />
+  </div>
+</template>
+
+<script setup>
+// Compute derived data instead of recalculating in template
+const paginatedItems = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  return items.value.slice(start, start + pageSize.value)
+})
+</script>
+```
+
+**❌ Bad Practice:** Inefficient rendering
+
+```vue
+<template>
+  <!-- No optimization, rerenders on any reactive change -->
+  <div>
+    <Item
+      v-for="item in items.slice((currentPage - 1) * pageSize, currentPage * pageSize)"
+      :key="item.id"
+      :item="item"
+    />
+  </div>
+</template>
+```
+
+## Code Consistency
+
+### Naming Conventions
+
+**✅ Good Practice:** Consistent naming
+
+```vue
+<!-- Components: PascalCase -->
+<UserProfile />
+
+<script setup>
+// Props: camelCase
+const props = defineProps({
+  userData: Object,
+  isLoading: Boolean,
+})
+
+// Methods: camelCase verb phrases
+function handleSubmit() {
+  /* ... */
+}
+
+// Composables: use* prefix
+const { user, isAdmin } = useUserData()
+</script>
+```
+
+**❌ Bad Practice:** Inconsistent naming
+
+```vue
+<!-- Mixed casing for components -->
+<user-profile />
+<UserDetails />
+
+<script setup>
+// Inconsistent prop naming
+const props = defineProps({
+  UserData: Object,
+  is_loading: Boolean,
+})
+
+// Inconsistent method naming
+function SubmitForm() {
+  /* ... */
+}
+function process_data() {
+  /* ... */
+}
+</script>
+```
+
+## Accessibility and Best Practices
+
+### Accessible Components
+
+**✅ Good Practice:** Accessible and semantic HTML
+
+```vue
+<template>
+  <section aria-labelledby="section-title">
+    <h2 id="section-title">Book Collection</h2>
+
+    <div role="status" v-if="isLoading">Loading...</div>
+
+    <ul v-else>
+      <li v-for="book in books" :key="book.id">
+        <button @click="selectBook(book)" aria-pressed="book.isSelected">
+          {{ book.title }}
+        </button>
+      </li>
+    </ul>
+  </section>
+</template>
+```
+
+**❌ Bad Practice:** Non-semantic HTML
+
+```vue
+<template>
+  <div>
+    <div>Book Collection</div>
+
+    <div v-if="isLoading">Loading...</div>
+
+    <div v-else>
+      <div v-for="book in books" :key="book.id">
+        <div @click="selectBook(book)">{{ book.title }}</div>
+      </div>
+    </div>
+  </div>
+</template>
+```
+
+## Conclusion
+
+Following these guidelines and SOLID principles will lead to more maintainable, testable, and scalable Vue applications. Remember that the ultimate goal is code that is easy to understand, modify, and extend as requirements evolve.

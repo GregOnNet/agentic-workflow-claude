@@ -53,10 +53,64 @@ export function useReadingState() {
     ) as BookReadingState
   }
 
+  // Individual book status management
+  function getBookStatus(bookId: number): string | undefined {
+    return safeExecute(
+      () => {
+        const state = loadReadingState()
+        return state[bookId]?.status
+      },
+      'useReadingState.getBookStatus',
+      undefined,
+    ) as string | undefined
+  }
+
+  function setBookStatus(bookId: number, status: 'to-read' | 'currently-reading' | 'read') {
+    return safeExecute(
+      () => {
+        const state = loadReadingState()
+        const maxOrder =
+          Math.max(0, ...Object.values(state).map((item) => item?.order || 0)) + 1
+        state[bookId] = { status, order: state[bookId]?.order ?? maxOrder }
+        saveReadingState(state)
+        readingState.value = state
+        console.log(`Set book ${bookId} status to ${status}`)
+      },
+      'useReadingState.setBookStatus',
+    )
+  }
+
+  function removeBookStatus(bookId: number) {
+    return safeExecute(
+      () => {
+        const state = loadReadingState()
+        delete state[bookId]
+        saveReadingState(state)
+        readingState.value = state
+        console.log(`Removed status for book ${bookId}`)
+      },
+      'useReadingState.removeBookStatus',
+    )
+  }
+
+  function getAllStatuses(): BookReadingState {
+    return safeExecute(
+      () => {
+        return loadReadingState()
+      },
+      'useReadingState.getAllStatuses',
+      {},
+    ) as BookReadingState
+  }
+
   return {
     readingState,
     loadState,
     saveState,
     clearState,
+    getBookStatus,
+    setBookStatus,
+    removeBookStatus,
+    getAllStatuses,
   }
 }

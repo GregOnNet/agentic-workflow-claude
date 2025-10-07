@@ -1,14 +1,27 @@
 <script setup lang="ts">
+import { useRouter } from 'vue-router'
 import type { Book } from '../types'
 
-defineProps<{
+const props = defineProps<{
   book: Book
 }>()
+
+const router = useRouter()
+
+function handleClick() {
+  router.push(`/books/${props.book.id}`)
+}
 </script>
 
 <template>
   <div
-    class="border border-gray-200 rounded-lg overflow-hidden shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-200 bg-white"
+    @click="handleClick"
+    @keypress.enter="handleClick"
+    tabindex="0"
+    role="button"
+    :aria-label="`View details for ${book.title}`"
+    data-testid="book-card"
+    class="border border-gray-200 rounded-lg overflow-hidden shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-200 bg-white cursor-pointer"
   >
     <div class="w-full h-[300px]">
       <img

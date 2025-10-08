@@ -1,0 +1,158 @@
+name: Issue Implementation Preparation
+
+on:
+    issues:
+        types: [labeled]
+
+jobs:
+    prepare-implementation:
+        if: github.event.label.name == 'ready-for-implementation'
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        permissions:
+            contents: write
+            issues: write
+            pull-requests: write
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - name: Prepare Feature Branch
+              id: prepare-branch
+              run: |
+                  # Generate branch name from issue
+                  ISSUE_NUMBER=${{ github.event.issue.number }}
+                  ISSUE_TITLE="${{ github.event.issue.title }}"
+                  # Convert to lowercase and replace spaces with hyphens, format: feature/{number}-{title}
+                  BRANCH_NAME=$(echo "feature/${ISSUE_NUMBER}-${ISSUE_TITLE}" | tr '[:upper:]' '[:lower:]' | sed 's/ /-/g' | sed 's/[^a-z0-9\-\/]//g')
+
+                  git config user.name "github-actions[bot]"
+                  git config user.email "github-actions[bot]@users.noreply.github.com"
+
+                  # Check if branch already exists
+                  if git ls-remote --heads origin "$BRANCH_NAME" | grep -q "$BRANCH_NAME"; then
+                    echo "Branch already exists, checking it out: $BRANCH_NAME"
+                    git fetch origin "$BRANCH_NAME"
+                    git checkout "$BRANCH_NAME"
+                    echo "branch_exists=true" >> $GITHUB_OUTPUT
+                  else
+                    git checkout -b "$BRANCH_NAME"
+                    echo "branch_exists=false" >> $GITHUB_OUTPUT
+                    echo "Branch created: $BRANCH_NAME"
+                  fi
+
+                  echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+
+            - name: Implement Feature with Claude
+              uses: anthropics/claude-code-action@main
+              with:
+                  anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+                  github_token: ${{ secrets.GITHUB_TOKEN }}
+                  claude_args: "--allowedTools Bash(gh *),Bash(git *),Read,Write,Edit,Glob,Grep"
+                  prompt: |
+                      Implement the requirements from the following issue COMPLETELY in the current branch.
+
+                      REPO: ${{ github.repository }}
+                      ISSUE_NUMBER: ${{ github.event.issue.number }}
+                      BRANCH: ${{ steps.prepare-branch.outputs.branch_name }}
+
+                      **IMPORTANT: You are already in the feature branch. Implement the feature completely and create the necessary commits.**
+
+                      **Project Context:**
+                      - Styling: Tailwind CSS 3.4.17
+                      - Deployment: GitHub via GitHub Actions
+
+                      **Project Structure:**
+                      ```
+                      src/
+                      ├── components/          #  Components
+                      ├── layouts/             # Layout Templates
+                      ```
+
+                      **Commit Standards (MANDATORY):**
+                      - Conventional Commits Format: `type(scope): description`
+                      - Types: feat, fix, docs, style, refactor, test, chore
+                      - End commit message with:
+                        ```
+                        🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+                        Co-Authored-By: Claude <noreply@anthropic.com>
+                        ```
+
+                      **Implementation Workflow:**
+                      1. Read the issue and fully understand the requirements
+                      2. Analyze the codebase and identify affected files
+                      3. Implement the changes (create/modify files)
+                      4. Create one or more commits with Conventional Commits format
+                      5. Push changes to the remote branch
+                      6. Comment on the issue with an implementation summary
+
+                      **After successful implementation, comment on the issue:**
+
+                      ## ✅ Implementation Completed
+
+                      **Branch:** `${{ steps.prepare-branch.outputs.branch_name }}`
+
+                      **Changes Made:**
+                      - [List of modified/created files]
+
+                      **Commits:**
+                      - [List of commit messages]
+
+                      **Testing:**
+                      - [Notes on testing the changes]
+
+                      **Next Steps:**
+                      - [ ] Perform local testing
+                      - [ ] Create Pull Request
+                      - [ ] Request code review
+
+                      ---
+                      *Implemented by Claude Code*
+
+            - name: Push Changes
+              run: |
+                  git push origin ${{ steps.prepare-branch.outputs.branch_name }}
+
+            - name: Create Pull Request
+              run: |
+                  # Check if PR already exists
+                  EXISTING_PR=$(gh pr list --head ${{ steps.prepare-branch.outputs.branch_name }} --json number --jq '.[0].number' --repo ${{ github.repository }})
+
+                  if [ -z "$EXISTING_PR" ]; then
+                    # Create new PR linked to issue
+                    gh pr create \
+                      --repo ${{ github.repository }} \
+                      --base main \
+                      --head ${{ steps.prepare-branch.outputs.branch_name }} \
+                      --title "feat: ${{ github.event.issue.title }}" \
+                      --body "$(cat <<'EOF'
+
+                  ## 🤖 Automatically Generated Pull Request
+
+                  This PR implements the requirements from Issue #${{ github.event.issue.number }}.
+
+                  ### 📋 Linked Issue
+                  Closes #${{ github.event.issue.number }}
+
+                  ### 🔍 Changes
+                  The implementation was automatically performed by Claude Code.
+
+                  ### ✅ Checklist
+                  - [ ] Code was tested locally
+                  - [ ] Conventional Commits followed
+                  - [ ] No Breaking Changes (or documented)
+                  - [ ] Documentation updated (if necessary)
+
+                    🤖 Created by [Claude Code](https://claude.com/claude-code)
+                    EOF
+                    )"
+                    echo "✅ Pull Request created"
+                  else
+                    echo "ℹ️ Pull Request already exists: #$EXISTING_PR"
+                  fi
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

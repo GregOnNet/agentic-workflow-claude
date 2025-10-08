@@ -1,0 +1,98 @@
+name: Issue Analysis with Claude
+
+on:
+    issues:
+        types: [opened, edited]
+    issue_comment:
+        types: [created]
+
+jobs:
+    analyze-issue:
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        permissions:
+            contents: read
+            issues: write
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Analyze Issue with Claude
+              uses: anthropics/claude-code-action@main
+              with:
+                  anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+                  github_token: ${{ secrets.GITHUB_TOKEN }}
+                  claude_args: "--allowedTools Bash(gh *)"
+                  prompt: |
+                      Analyze the following issue and create a structured report. This is a re-analysis due to changes in the issue.
+
+                      REPO: ${{ github.repository }}
+                      ISSUE_NUMBER: ${{ github.event.issue.number || github.event.comment.issue_url }}
+
+                      **Note:** Check if an analysis already exists. If yes, update the existing analysis comment or create a new one with "🔄 Updated Analysis".
+
+                      You are a technical analyst who reviews GitHub issues for quality and completeness.
+
+                      **Analysis Criteria:**
+
+                      1. **User Story Structure:**
+                         - Is a user story present?
+                         - Does it follow the format: "As [role] I want [feature] so that [benefit]"?
+                         - Are role, feature, and benefit clearly defined?
+
+                      2. **Code Relevance:**
+                         - Is there a recognizable reference to existing code?
+                         - Which components/modules are affected?
+                         - Based on the project structure (Astro, React, Firebase): Where would the implementation take place?
+
+                      3. **Completeness:**
+                         - Is all necessary information present?
+                         - What gaps exist in the description?
+                         - Are acceptance criteria or technical details missing?
+
+                      4. **Important Considerations:**
+                         - What should be considered during implementation?
+                         - Are there dependencies on other features?
+                         - What impact does the feature have on other system parts?
+
+                      5. **Security Risks:**
+                         - What security aspects must be considered?
+                         - Are there potential vulnerabilities?
+                         - Are authentication/authorization affected?
+
+                      **Please create a comment in the issue with the following format:**
+
+                      ## 🤖 Automated Issue Analysis by Claude
+
+                      ## 📋 Issue Quality Assessment
+
+                      ✅ **Quality:** [SUFFICIENT / NEEDS IMPROVEMENT]
+
+                      ## 🎯 User Story Analysis
+
+                      [Assessment of user story structure]
+
+                      ## 🔍 Code Relevance
+
+                      [Analysis of code reference and affected components]
+
+                      ## ⚠️ Missing Information
+
+                      [List of gaps in the description]
+
+                      ## 💡 Implementation Hints
+
+                      [Important considerations for implementation]
+
+                      ## 🔒 Security Aspects
+
+                      [Identified security risks and recommendations]
+
+                      ## 🚀 Next Steps
+
+                      [If SUFFICIENT: Set label "ready-for-implementation" and suggest feature branch name]
+                      [If NEEDS IMPROVEMENT: Set label "needs-clarification" and ask specific questions]
+
+                      ---
+                      *This analysis was created automatically.*

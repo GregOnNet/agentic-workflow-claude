@@ -195,9 +195,9 @@ onBeforeUnmount(() => {
         <button
           type="button"
           @click="
-            formData = { name: user.name, email: user.email }
-            errors = {}
-            showSuccessMessage = false
+            formData = { name: user.name, email: user.email };
+            errors = {};
+            showSuccessMessage = false;
           "
           :disabled="isSubmitting"
           data-testid="cancel-button"

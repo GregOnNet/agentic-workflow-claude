@@ -25,3 +25,14 @@ export interface BookReadingState {
     order: number
   }
 }
+
+// User profile types
+export interface User {
+  name: string
+  email: string
+}
+
+export interface ValidationError {
+  field: string
+  message: string
+}

@@ -26,6 +26,11 @@ const router = createRouter({
       name: 'kanban',
       component: KanbanView,
     },
+    {
+      path: '/profile',
+      name: 'profile',
+      component: () => import('../views/ProfileView.vue'),
+    },
   ],
 })
 

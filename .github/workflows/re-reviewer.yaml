@@ -1,0 +1,28 @@
+name: Requirements Reviewer
+
+on:
+   issues:
+      types: [opened, edited]
+
+jobs:
+   analyze-issue:
+      runs-on: ubuntu-latest
+      timeout-minutes: 10
+      permissions:
+         contents: read
+         issues: write
+
+      steps:
+         - name: Checkout repository
+           uses: actions/checkout@v4
+
+         - name: Analyze Issue with Claude
+           uses: anthropics/claude-code-action@main
+           with:
+              anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+              github_token: ${{ secrets.GITHUB_TOKEN }}
+              claude_args: "--allowedTools Bash(gh *) --model opus --max-turns 5"
+              prompt: |
+                 /re-review
+                  - Repository ${{ github.repository }}
+                  - ISSUE_NUMBER ${{ github.event.issue.number || github.event.comment.issue_url }}"

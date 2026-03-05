@@ -59,6 +59,20 @@ export async function getBooks(params: PaginationParams = {}): Promise<Paginatio
   }
 }
 
+export async function createBook(book: Omit<Book, 'id'> & { id: number }): Promise<Book> {
+  const response = await fetch(`${API_URL}/books`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(book),
+  })
+
+  if (!response.ok) {
+    throw new Error(`API error: ${response.status}`)
+  }
+
+  return response.json()
+}
+
 export async function getBookById(id: number): Promise<Book | null> {
   try {
     const response = await fetch(`${API_URL}/books/${id}`)

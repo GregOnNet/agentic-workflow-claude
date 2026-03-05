@@ -4,8 +4,11 @@ import { useBookData } from '../composables/useBookData'
 import { useErrorHandler } from '../composables/useErrorHandler'
 import { usePagination } from '../composables/usePagination'
 import { useSearch } from '../composables/useSearch'
+import { useRouter } from 'vue-router'
 import BookCard from './BookCard.vue'
 import Pagination from './Pagination.vue'
+
+const router = useRouter()
 
 // Error handling
 const { error: componentError, handleError, clearError } = useErrorHandler()
@@ -40,7 +43,16 @@ onMounted(() => {
 
 <template>
   <div class="max-w-7xl mx-auto px-5 py-5">
-    <h1 class="text-4xl font-bold mb-6">Book Collection</h1>
+    <div class="flex justify-between items-center mb-6">
+      <h1 class="text-4xl font-bold">Book Collection</h1>
+      <button
+        @click="router.push('/books/new')"
+        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+        data-testid="create-book-button"
+      >
+        Create Book
+      </button>
+    </div>
 
     <!-- Error Banner -->
     <div

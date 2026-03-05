@@ -1,5 +1,5 @@
 ---
-name: re-reviewer
+name: ci-re-reviewer
 description: Reviews a created or updated issue
 ---
 
@@ -18,3 +18,8 @@ _If one of the above is not given, stop immediately_
 - Collect all missing information
 - Reason about edge cases the requirement does not cover
 - Create a comment using `gh` (GitHub CLI) and write all findings using the template in `./assets/ISSUE_COMMENT_TEMPLATE.md`
+
+### Issue tagging
+
+- If all information look good tag the issue with `ready-for-implementation`
+- If information are missing tag the issue with `blocked`

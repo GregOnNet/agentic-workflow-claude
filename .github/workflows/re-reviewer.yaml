@@ -23,6 +23,6 @@ jobs:
               github_token: ${{ secrets.GITHUB_TOKEN }}
               claude_args: "--allowedTools Bash(gh *) --model opus"
               prompt: |
-                 /re-review
+                 /re-reviewer
                   - Repository ${{ github.repository }}
                   - ISSUE_NUMBER ${{ github.event.issue.number || github.event.comment.issue_url }}"

@@ -21,7 +21,7 @@ jobs:
            with:
               anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
               github_token: ${{ secrets.GITHUB_TOKEN }}
-              claude_args: "--allowedTools Bash(gh *) --model opus --max-turns 5"
+              claude_args: "--allowedTools Bash(gh *) --model opus"
               prompt: |
                  /re-review
                   - Repository ${{ github.repository }}

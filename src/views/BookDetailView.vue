@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { computed, onErrorCaptured } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { computed, onBeforeUnmount, onErrorCaptured, onMounted, ref } from 'vue'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
+import BookEditForm from '@/components/BookEditForm.vue'
 import { useBookDetail } from '@/composables/useBookDetail'
-import { useReadingState } from '@/composables/useReadingState'
 import { useErrorHandler } from '@/composables/useErrorHandler'
+import { useReadingState } from '@/composables/useReadingState'
+import type { Book } from '@/types'
 
 // Router
 const route = useRoute()
@@ -19,11 +21,35 @@ onErrorCaptured((err, instance, info) => {
 })
 
 // Book data
-const { book, isLoading, error: fetchError } = useBookDetail(bookId)
+const { book, isLoading, error: fetchError, refetch } = useBookDetail(bookId)
 
 // Reading status
 const { getBookStatus, setBookStatus } = useReadingState()
 const currentStatus = computed(() => getBookStatus(bookId.value))
+
+// Edit mode
+const isEditing = ref(false)
+const isDirty = ref(false)
+
+function handleEdit() {
+  isEditing.value = true
+  isDirty.value = false
+}
+
+function handleCancel() {
+  isEditing.value = false
+  isDirty.value = false
+}
+
+async function handleSaved(_updated: Book) {
+  isEditing.value = false
+  isDirty.value = false
+  await refetch()
+}
+
+function handleDirtyChange(dirty: boolean) {
+  isDirty.value = dirty
+}
 
 // Methods
 function handleBack() {
@@ -44,6 +70,35 @@ const coverUrl = computed(
 )
 
 const displayYear = computed(() => (book.value?.year ? ` (${book.value.year})` : ''))
+
+// Warn the user before leaving with unsaved edits
+function beforeUnloadHandler(event: BeforeUnloadEvent) {
+  if (isEditing.value && isDirty.value) {
+    event.preventDefault()
+    event.returnValue = ''
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('beforeunload', beforeUnloadHandler)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', beforeUnloadHandler)
+})
+
+onBeforeRouteLeave((_to, _from, next) => {
+  if (isEditing.value && isDirty.value) {
+    const confirmed = window.confirm(
+      'You have unsaved changes. Are you sure you want to leave?',
+    )
+    if (!confirmed) {
+      next(false)
+      return
+    }
+  }
+  next()
+})
 </script>
 
 <template>
@@ -103,40 +158,61 @@ const displayYear = computed(() => (book.value?.year ? ` (${book.value.year})` :
 
         <!-- Book Information -->
         <div class="lg:col-span-3">
-          <h1 id="book-title" class="text-4xl font-bold mb-2">{{ book.title }}{{ displayYear }}</h1>
+          <template v-if="!isEditing">
+            <h1 id="book-title" class="text-4xl font-bold mb-2">
+              {{ book.title }}{{ displayYear }}
+            </h1>
 
-          <p class="text-xl text-gray-600 italic mb-6" data-testid="book-author">
-            by {{ book.author }}
-          </p>
+            <p class="text-xl text-gray-600 italic mb-6" data-testid="book-author">
+              by {{ book.author }}
+            </p>
 
-          <!-- Reading Status -->
-          <div class="mb-6">
-            <label for="reading-status" class="block text-sm font-medium text-gray-700 mb-2">
-              Reading Status
-            </label>
-            <select
-              id="reading-status"
-              :value="currentStatus"
-              @change="handleStatusChange"
-              class="w-full sm:w-auto px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            <button
+              @click="handleEdit"
+              data-testid="book-edit-button"
+              class="mb-6 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
             >
-              <option value="">Not Set</option>
-              <option value="to-read">To Read</option>
-              <option value="currently-reading">Currently Reading</option>
-              <option value="read">Read</option>
-            </select>
-          </div>
+              Edit
+            </button>
 
-          <!-- Description -->
-          <div v-if="book.description" class="prose max-w-none">
-            <h2 class="text-2xl font-semibold mb-3">Description</h2>
-            <p class="text-gray-700 leading-relaxed">{{ book.description }}</p>
-          </div>
+            <!-- Reading Status -->
+            <div class="mb-6">
+              <label for="reading-status" class="block text-sm font-medium text-gray-700 mb-2">
+                Reading Status
+              </label>
+              <select
+                id="reading-status"
+                :value="currentStatus"
+                @change="handleStatusChange"
+                class="w-full sm:w-auto px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Not Set</option>
+                <option value="to-read">To Read</option>
+                <option value="currently-reading">Currently Reading</option>
+                <option value="read">Read</option>
+              </select>
+            </div>
 
-          <div v-else class="text-gray-500 italic">No description available.</div>
+            <!-- Description -->
+            <div v-if="book.description" class="prose max-w-none">
+              <h2 class="text-2xl font-semibold mb-3">Description</h2>
+              <p class="text-gray-700 leading-relaxed">{{ book.description }}</p>
+            </div>
+
+            <div v-else class="text-gray-500 italic">No description available.</div>
+          </template>
+
+          <template v-else>
+            <h1 id="book-title" class="text-4xl font-bold mb-6">Edit Book</h1>
+            <BookEditForm
+              :book="book"
+              @saved="handleSaved"
+              @cancel="handleCancel"
+              @dirty-change="handleDirtyChange"
+            />
+          </template>
         </div>
       </div>
     </article>
   </main>
 </template>
-

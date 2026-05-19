@@ -71,3 +71,28 @@ export async function getBookById(id: number): Promise<Book | null> {
     return null
   }
 }
+
+export interface BookUpdatePayload {
+  title: string
+  author: string
+  year?: number
+  cover?: string
+  description?: string
+}
+
+export async function updateBook(id: number, payload: BookUpdatePayload): Promise<Book> {
+  const response = await fetch(`${API_URL}/books/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+
+  if (!response.ok) {
+    if (response.status === 404) {
+      throw new Error('Book not found')
+    }
+    throw new Error(`Failed to update book: ${response.status}`)
+  }
+
+  return await response.json()
+}

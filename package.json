@@ -16,7 +16,8 @@
     "type-check": "vue-tsc --build",
     "lint": "eslint .",
     "format": "prettier --write src/",
-    "build.your-mcp": "tsc --project tools/your-mcp/tsconfig.json"
+    "build.your-mcp": "tsc --project tools/your-mcp/tsconfig.json",
+    "prepare": "husky"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.19.1",
@@ -39,6 +40,7 @@
     "eslint": "^9.33.0",
     "eslint-plugin-playwright": "^2.2.2",
     "eslint-plugin-vue": "~10.4.0",
+    "husky": "^9.1.7",
     "jiti": "^2.5.1",
     "jsdom": "^27.0.0",
     "npm-run-all2": "^8.0.4",

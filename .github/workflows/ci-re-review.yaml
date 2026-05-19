@@ -22,6 +22,7 @@ jobs:
               anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
               github_token: ${{ secrets.GITHUB_TOKEN }}
               claude_args: "--allowedTools Bash(gh *) --model opus"
+              model: "claude-sonnet-4-6"
               prompt: |
                  /ci-re-review
                   - Repository ${{ github.repository }}

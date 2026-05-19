@@ -1,4 +1,4 @@
-name: Issue Implementation Preparation
+name: CI SE Green
 
 on:
   issues:
@@ -53,7 +53,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           claude_args: "--allowedTools Bash(gh *),Bash(git *),Read,Write,Edit,Glob,Grep"
           prompt: |
-            /ci-se-explorer
+            /ci-se-green
               Repository: ${{ github.repository }}
               Issue Number: ${{ github.event.issue.number }}
               Branch: ${{ steps.prepare-branch.outputs.branch_name }}

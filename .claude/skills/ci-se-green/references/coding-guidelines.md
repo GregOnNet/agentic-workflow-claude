@@ -1,9 +1,3 @@
----
-name: se-blue
-description: Refactors Angular components, service & templates, according to the team's coding guide lines, embracing S.O.L.I.D principles.
----
-
-# SE Blue
 
 ## Role
 

@@ -1,36 +1,29 @@
 ---
-name: requirements-finaliser
-description: Final step in the agentic requirements workflow. Reconciles implementation with original acceptance criteria, verifies delivery, updates the GitHub issue, and outputs a completion summary. Use after developer-ui-ux when the user asks to finalise requirements, close the feature, or complete the delivery.
+name: re-updater
+description: Final step in the agentic requirements workflow. Reconciles implementation with original acceptance criteria, verifies delivery, updates the local requirements file, and outputs a completion summary. Use after developer-ui-ux when the user asks to finalise requirements, close the feature, or complete the delivery.
 ---
 
-# Requirements Finaliser
+# RE Updater
 
-Closes the requirements workflow: verifies delivery against acceptance criteria, updates the issue, and produces a completion summary. Runs after developer-ui-ux.
-
-## Position in Workflow
-
-1. **requirements-interviewer** → User story, acceptance criteria, GitHub issue
-2. **developer-red** → Failing tests
-3. **developer-green** → Passing implementation
-4. **developer-ui-ux** → Polished UI/UX
-5. **requirements-finaliser** → Final verification and handover (this skill)
+Closes the requirements workflow: verifies delivery against acceptance criteria, updates the requirements file, and produces a completion summary. Runs after developer-ui-ux.
 
 ## Prerequisites
 
-- Original user story and acceptance criteria (from requirements-interviewer)
-- Implementation completed; developer-ui-ux already applied
-- GitHub issue created by requirements-interviewer
+- Original user story and acceptance criteria from `requirements/<number>.md`
+- `npx playwright test --reporter line` ✓
+- `npm run build` ✓
 
 ## Workflow
 
-1. **Reconcile** – Map each acceptance criterion to evidence (tests, components, routes); mark fulfilled or note gaps
-2. **Verify** – Run `npm test`, `npx playwright test`, `npm run build`; all must pass
-3. **Update issue** – Check or uncheck acceptance criteria, add comment that implementation is done
-4. **Output** – Deliver completion summary (see template)
+1. **Load requirements** – Read `requirements/<number>.md`
+2. **Reconcile** – Map each acceptance criterion to evidence (tests, components, routes); mark fulfilled or note gaps
+3. **Update requirements file** – Mark completed criteria and add implementation summary plus verification results
+4. **Verify** – Run `npm test`, `npx playwright test`, `npm run build`; all must pass
+5. **Output** – Deliver completion summary (see template)
 
 ## Reconcile Template
 
-For each acceptance criterion from the original issue:
+For each acceptance criterion from `requirements/<number>.md`:
 
 ```
 - [x] Given [context], when [action], then [result] → implemented in [component/service], covered by [test file]
@@ -42,29 +35,28 @@ For each acceptance criterion from the original issue:
 ```markdown
 ## Feature Complete
 
-**User story:** [as stated in issue]
+**User story:** [as stated in requirements/<number>.md]
 
 ### Delivered
 
 - [List key deliverables: routes, components, tests]
 - All acceptance criteria: [x]/[total] met
 
-### Verification
+### Requirements
 
-- `npm test` ✓
-- `npx playwright test` ✓
-- `npm run build` ✓
-
-### Issue
-
-- Closed: #<issue-number>
+- Updated: `requirements/<number>.md`
 ```
 
-## GitHub Integration
+## Requirements File Update
 
-- Close the issue: `gh issue close <number>`
-- Add summary comment: `gh issue comment <number> --body "..."` with the completion summary
+When finalising, update `requirements/<number>.md` directly:
+
+- Keep acceptance criteria checklist current (`[x]` for fulfilled, `[ ]` for pending)
+- Add a short "Implementation complete" note with:
+  - key deliverables
+  - verification command results
+  - remaining follow-ups (if any)
 
 ## Context Recovery
 
-If you lack the original requirements or issue number, ask the user to run `/context-recovery` or provide the issue link.
+If you lack the original requirements or number, ask the user for the requirement number and read `requirements/<number>.md`. If needed, ask the user to run `/context-recovery`.

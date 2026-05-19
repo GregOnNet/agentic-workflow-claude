@@ -9,7 +9,8 @@ Implements minimal production code so that existing failing tests pass. Compleme
 
 ## Prerequisites
 
-- Failing UI tests
+- Failing unit tests in `src/**/*.spec.ts` and/or UI tests in `tests/**/*.spec.ts`
+- Requirements (user story with acceptance criteria) when available
 
 ## Workflow
 
